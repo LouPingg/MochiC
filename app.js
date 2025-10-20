@@ -1,5 +1,5 @@
 /* ================ API CONFIG ================ */
-const PROD_API = "https://mochi-backend-ix9y.onrender.com";
+const PROD_API = "https://mochibc.onrender.com";
 
 // Force using the prod API while developing locally with Live Server.
 // Set to false if you actually run a backend on http://127.0.0.1:5000
