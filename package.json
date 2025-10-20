@@ -1,0 +1,8 @@
+{
+  "name": "mochi-root",
+  "private": true,
+  "scripts": {
+    "install": "cd backend && npm install",
+    "start": "cd backend && node server.mjs"
+  }
+}
