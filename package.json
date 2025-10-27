@@ -4,5 +4,22 @@
   "scripts": {
     "install": "cd backend && npm install",
     "start": "cd backend && node server.mjs"
+  },
+  "version": "1.0.0",
+  "main": "app.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LouPingg/MochiC.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/LouPingg/MochiC/issues"
+  },
+  "homepage": "https://github.com/LouPingg/MochiC#readme",
+  "description": "",
+  "dependencies": {
+    "bcryptjs": "^3.0.2"
   }
 }

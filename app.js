@@ -115,7 +115,6 @@ function updateHeaderAction() {
 function toggleAdminUI() {
   document.body.classList.toggle("is-auth", !!isAdmin);
   updateHeaderAction();
-  // show add-photo form only in photos-view and when auth
   if (addPhotoForm) {
     if (isAdmin && currentAlbum) addPhotoForm.classList.remove("hidden");
     else addPhotoForm.classList.add("hidden");
@@ -163,24 +162,35 @@ async function checkAuth() {
   toggleAdminUI();
 }
 
-async function loadAlbums() {
+/* ========= NEW: load images directly from Cloudinary ========= */
+async function loadImages() {
   try {
-    setMsg(albumsMsg, "Loading albums…");
-    const res = await fetch(`${API}/albums`, {
+    setMsg(albumsMsg, "Loading gallery…");
+    const res = await fetch(`${API}/images`, {
       credentials: "include",
       headers: authHeaders(),
     });
-    if (!res.ok) throw new Error("Error loading /albums " + res.status);
-    albums = await res.json();
-    // normalize
-    albums.forEach((a) => {
-      a.photos = Array.isArray(a.photos) ? a.photos : [];
-    });
+    if (!res.ok) throw new Error("Error loading /images " + res.status);
+    const data = await res.json();
+
+    // Simule un album global unique contenant toutes les images Cloudinary
+    albums = [
+      {
+        id: "mochi-all",
+        title: "Gallery",
+        photos: data.map((img) => ({
+          id: img.public_id,
+          url: img.url,
+          orientation: img.width >= img.height ? "landscape" : "portrait",
+        })),
+      },
+    ];
+
     renderAlbums();
     setMsg(albumsMsg, "");
   } catch (err) {
     console.error(err);
-    setMsg(albumsMsg, "Failed to load albums.", "msg--error");
+    setMsg(albumsMsg, "Failed to load gallery.", "msg--error");
   }
 }
 
@@ -206,31 +216,24 @@ function renderAlbums() {
         }
         <div class="title">${a.title}</div>
         <div class="meta">${count} photo(s)</div>
-        ${
-          isAdmin
-            ? `<button class="btn-trash" data-del-album="${a.id}">🗑</button>`
-            : ""
-        }
       </article>`;
     })
     .join("");
 
   if (!visible.length) {
     albumsGrid.innerHTML = "";
-    setMsg(albumsMsg, `No album contains ${currentFilter} photos.`);
+    setMsg(albumsMsg, `No ${currentFilter} photos found.`);
   } else {
     setMsg(albumsMsg, "");
   }
 
   photosView.classList.add("hidden");
   albumsView.classList.remove("hidden");
-  // hide add-photo admin form outside photos view
   addPhotoForm?.classList.add("hidden");
 }
 
 function renderPhotos() {
-  if (!currentAlbum || !photosGrid || !albumTitle || !albumsView || !photosView)
-    return;
+  if (!currentAlbum || !photosGrid || !albumTitle) return;
   albumTitle.textContent = currentAlbum.title;
 
   const list = getCurrentPhotoList();
@@ -250,7 +253,7 @@ function renderPhotos() {
 
   if (!list.length) {
     photosGrid.innerHTML = "";
-    setMsg(photosMsg, `No ${currentFilter} photos in this album.`);
+    setMsg(photosMsg, `No ${currentFilter} photos.`);
   } else {
     setMsg(photosMsg, "");
   }
@@ -301,27 +304,7 @@ function prevPhoto() {
 }
 
 /* ================ EVENTS ================ */
-/* Albums grid interactions */
 albumsGrid?.addEventListener("click", (e) => {
-  const del = e.target.closest("[data-del-album]");
-  if (del && isAdmin) {
-    const id = del.dataset.delAlbum;
-    if (confirm("Delete this album?")) {
-      fetch(`${API}/albums/${id}`, {
-        method: "DELETE",
-        credentials: "include",
-        headers: authHeaders(),
-      })
-        .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
-        .then(() => {
-          albums = albums.filter((a) => a.id !== id);
-          if (currentAlbum?.id === id) currentAlbum = null;
-          renderAlbums();
-        })
-        .catch(() => {});
-    }
-    return;
-  }
   const card = e.target.closest("[data-album]");
   if (card) openAlbum(card.dataset.album);
 });
@@ -332,26 +315,7 @@ albumsGrid?.addEventListener("keydown", (e) => {
   }
 });
 
-/* Photos grid interactions */
 photosGrid?.addEventListener("click", (e) => {
-  const del = e.target.closest("[data-del-photo]");
-  if (del && isAdmin) {
-    const id = del.dataset.delPhoto;
-    if (confirm("Delete this photo?")) {
-      fetch(`${API}/photos/${id}`, {
-        method: "DELETE",
-        credentials: "include",
-        headers: authHeaders(),
-      })
-        .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
-        .then(() => {
-          currentAlbum.photos = currentAlbum.photos.filter((p) => p.id !== id);
-          renderPhotos();
-        })
-        .catch(() => {});
-    }
-    return;
-  }
   const fig = e.target.closest("figure.card");
   if (!fig) return;
   openLightbox(Number(fig.dataset.index));
@@ -362,7 +326,7 @@ backBtn?.addEventListener("click", backToAlbums);
 homeLink?.addEventListener("click", async (e) => {
   e.preventDefault();
   currentAlbum = null;
-  await loadAlbums();
+  await loadImages();
   setFilter(currentFilter);
   window.scrollTo({ top: 0, behavior: "smooth" });
 });
@@ -377,8 +341,7 @@ lightbox?.addEventListener("click", (e) => {
   if (e.target === lightbox) closeLightbox();
 });
 window.addEventListener("keydown", (e) => {
-  const lb = document.getElementById("lightbox");
-  if (!lb || lb.classList.contains("hidden")) return;
+  if (!lightbox || lightbox.classList.contains("hidden")) return;
   if (e.key === "Escape") closeLightbox();
   if (e.key === "ArrowRight") nextPhoto();
   if (e.key === "ArrowLeft") prevPhoto();
@@ -389,7 +352,6 @@ headerActionBtn?.addEventListener("click", async () => {
   if (!isAdmin) {
     openLoginModal();
   } else {
-    // logout directly
     try {
       setToken("");
       await fetch(`${API}/auth/logout`, {
@@ -413,12 +375,10 @@ window.addEventListener("keydown", (e) => {
   }
 });
 
-/* ================ ADMIN FLOWS ================ */
-/* Login */
+/* ================ ADMIN LOGIN ================ */
 loginForm?.addEventListener("submit", async (e) => {
   e.preventDefault();
-  const formEl = e.currentTarget;
-  const fd = new FormData(formEl);
+  const fd = new FormData(e.currentTarget);
   const body = { username: fd.get("username"), password: fd.get("password") };
   setMsg(document.getElementById("login-msg"), "Signing in…");
 
@@ -435,179 +395,13 @@ loginForm?.addEventListener("submit", async (e) => {
 
     isAdmin = true;
     toggleAdminUI();
-    await loadAlbums();
-    formEl?.reset?.();
+    await loadImages();
+    e.currentTarget?.reset?.();
     closeLoginModal();
   } catch (err) {
     setMsg(document.getElementById("login-msg"), err.message, "msg--error");
   } finally {
     setTimeout(() => setMsg(document.getElementById("login-msg"), ""), 2000);
-  }
-});
-
-/* Create album (+ optional first photo) */
-createAlbumForm?.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const formEl = e.currentTarget;
-  const submitBtn = formEl.querySelector('button[type="submit"]');
-  const msgEl = createAlbumMsg;
-  submitBtn.disabled = true;
-  const originalLabel = submitBtn.textContent;
-  submitBtn.textContent = "Creating…";
-  setMsg(msgEl, "");
-
-  const fd = new FormData(formEl);
-  const title = (fd.get("title") || "").toString().trim();
-  const file = fd.get("file");
-  const url = (fd.get("url") || "").toString().trim();
-  const selectedOrientation = (fd.get("orientation") || "").toString();
-
-  try {
-    if (!title) throw new Error("Please enter an album title.");
-
-    // enforce orientation when URL is provided
-    if (url && !file && !selectedOrientation) {
-      throw new Error("Select an orientation when using an image URL.");
-    }
-
-    // 1) create album
-    let r = await fetch(`${API}/albums`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...authHeaders() },
-      credentials: "include",
-      body: JSON.stringify({ title }),
-    });
-    let data = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(data?.error || "Album creation failed");
-
-    const album = data;
-    if (!Array.isArray(album.photos)) album.photos = [];
-    albums.push(album);
-
-    let createdOrientation = null;
-
-    // 2) optional first photo
-    if ((file && file.size > 0) || url) {
-      if (file && file.size > 0) {
-        // detect orientation client-side for file
-        const detected = await getOrientationFromFile(file);
-        const orientationToSend = selectedOrientation || detected || "";
-        const form = new FormData();
-        form.append("albumId", album.id);
-        form.append("file", file);
-        if (orientationToSend) form.append("orientation", orientationToSend);
-        r = await fetch(`${API}/photos`, {
-          method: "POST",
-          credentials: "include",
-          headers: authHeaders(), // no content-type for FormData
-          body: form,
-        });
-      } else {
-        r = await fetch(`${API}/photos`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", ...authHeaders() },
-          credentials: "include",
-          body: JSON.stringify({
-            albumId: album.id,
-            url,
-            orientation: selectedOrientation,
-          }),
-        });
-      }
-
-      data = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(data?.error || "Photo upload failed");
-
-      const photo = data;
-      const a = albums.find((x) => x.id === album.id);
-      if (a) {
-        if (!Array.isArray(a.photos)) a.photos = [];
-        a.photos.push(photo);
-      }
-      createdOrientation = photo.orientation || null;
-    }
-
-    currentAlbum = null;
-    if (createdOrientation) setFilter(createdOrientation);
-    else setFilter(currentFilter);
-    renderAlbums();
-    formEl?.reset?.();
-    setMsg(msgEl, "Album created.", "msg--ok");
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  } catch (err) {
-    setMsg(msgEl, err.message, "msg--error");
-  } finally {
-    submitBtn.disabled = false;
-    submitBtn.textContent = originalLabel;
-    setTimeout(() => setMsg(msgEl, ""), 2500);
-  }
-});
-
-/* Add photo to current album */
-addPhotoForm?.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const formEl = e.currentTarget;
-  const submitBtn = formEl.querySelector('button[type="submit"]');
-  submitBtn.disabled = true;
-  const originalLabel = submitBtn.textContent;
-  submitBtn.textContent = "Adding…";
-  setMsg(addPhotoMsg, "");
-
-  const fd = new FormData(formEl);
-  const url = (fd.get("url") || "").toString().trim();
-  const file = fd.get("file");
-  const selectedOrientation = (fd.get("orientation") || "").toString();
-
-  try {
-    if (!currentAlbum) throw new Error("No album selected.");
-    if (!url && !(file && file.size > 0)) {
-      throw new Error("Provide a file or a URL.");
-    }
-    if (url && !selectedOrientation) {
-      throw new Error("Select an orientation when using an image URL.");
-    }
-
-    let r, data;
-    if (file && file.size > 0) {
-      const detected = await getOrientationFromFile(file);
-      const orientationToSend = selectedOrientation || detected || "";
-      const form = new FormData();
-      form.append("albumId", currentAlbum.id);
-      form.append("file", file);
-      if (orientationToSend) form.append("orientation", orientationToSend);
-      r = await fetch(`${API}/photos`, {
-        method: "POST",
-        credentials: "include",
-        headers: authHeaders(),
-        body: form,
-      });
-    } else {
-      r = await fetch(`${API}/photos`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeaders() },
-        credentials: "include",
-        body: JSON.stringify({
-          albumId: currentAlbum.id,
-          url,
-          orientation: selectedOrientation,
-        }),
-      });
-    }
-
-    data = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(data?.error || "Photo upload failed");
-
-    const photo = data;
-    currentAlbum.photos.push(photo);
-    renderPhotos();
-    formEl?.reset?.();
-    setMsg(addPhotoMsg, "Photo added.", "msg--ok");
-  } catch (err) {
-    setMsg(addPhotoMsg, err.message, "msg--error");
-  } finally {
-    submitBtn.disabled = false;
-    submitBtn.textContent = originalLabel;
-    setTimeout(() => setMsg(addPhotoMsg, ""), 2500);
   }
 });
 
@@ -623,9 +417,8 @@ requestAnimationFrame(() => {
     await checkAuth();
   } catch {}
   try {
-    await loadAlbums();
+    await loadImages();
   } catch {}
-  // safety: ensure UI coherent if cookie expired
   setTimeout(() => {
     isAdmin = !!isAdmin;
     toggleAdminUI();
