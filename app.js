@@ -1,6 +1,8 @@
+/* ================ API CONFIG ================ */
 const PROD_API = "https://mochibc.onrender.com";
 const API = PROD_API;
 
+/* ================ SELECTORS ================ */
 const albumsGrid = document.getElementById("albums-grid");
 const albumsMsg = document.getElementById("albums-msg");
 const btnPortrait = document.querySelector('[data-filter="portrait"]');
@@ -17,6 +19,7 @@ function setMsg(el, text, type = "") {
   el.textContent = text;
   el.className = "msg " + type;
 }
+
 function setFilter(value) {
   currentFilter = value;
   document
@@ -32,7 +35,7 @@ function setFilter(value) {
 async function loadAlbums() {
   try {
     setMsg(albumsMsg, "Loading albums…");
-    const r = await fetch(`${API}/albums`);
+    const r = await fetch(`${API}/albums`, { credentials: "include" }); // ✅ ajoute credentials
     const j = await r.json();
     albums = j;
     renderAlbums();
@@ -45,16 +48,21 @@ async function loadAlbums() {
 
 /* ====== Render ====== */
 function renderAlbums() {
-  const visible = albums.filter((a) => a.orientation === currentFilter);
+  // ✅ tolère les albums sans orientation
+  const visible = albums.filter(
+    (a) => a.orientation === currentFilter || !a.orientation
+  );
+
   albumsGrid.innerHTML = visible
     .map(
       (a) => `
       <figure class="card ${a.orientation}">
-        <img src="${a.coverUrl}" alt="${a.title}">
+        <img src="${a.coverUrl || "assets/placeholder.jpg"}" alt="${a.title}">
         <figcaption>${a.title}</figcaption>
       </figure>`
     )
     .join("");
+
   if (!visible.length)
     setMsg(albumsMsg, `No ${currentFilter} albums yet.`, "msg--error");
 }
@@ -65,10 +73,12 @@ createAlbumForm?.addEventListener("submit", async (e) => {
   const fd = new FormData(e.currentTarget);
   const file = fd.get("file");
   const title = fd.get("title");
+
   if (!title) return setMsg(createMsg, "Title required", "msg--error");
   if (!file.size) return setMsg(createMsg, "Choose a photo", "msg--error");
 
   setMsg(createMsg, "Creating album…");
+
   try {
     const form = new FormData();
     form.append("title", title);
@@ -79,13 +89,17 @@ createAlbumForm?.addEventListener("submit", async (e) => {
       body: form,
       credentials: "include",
     });
+
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || "failed");
 
-    // Ajout immédiat sans reload :
+    // ✅ Ajout immédiat sans reload
     albums.push(j);
     renderAlbums();
-    e.currentTarget.reset();
+
+    // ✅ reset protégé
+    createAlbumForm?.reset();
+
     setMsg(createMsg, "Album created ✅", "msg--ok");
   } catch (err) {
     console.error("Album create error:", err);
@@ -99,7 +113,7 @@ createAlbumForm?.addEventListener("submit", async (e) => {
 btnPortrait?.addEventListener("click", () => setFilter("portrait"));
 btnLandscape?.addEventListener("click", () => setFilter("landscape"));
 
-/* ===== ADMIN LOGIN ===== */
+/* ====== ADMIN LOGIN ====== */
 const loginModal = document.getElementById("login-modal");
 const headerActionBtn = document.getElementById("header-action-btn");
 const closeLoginBtn = document.getElementById("close-login-btn");
@@ -145,6 +159,7 @@ loginForm?.addEventListener("submit", async (e) => {
     password: fd.get("password"),
   };
   setMsg(loginMsg, "Signing in…");
+
   try {
     const r = await fetch(`${API}/auth/login`, {
       method: "POST",
@@ -152,8 +167,10 @@ loginForm?.addEventListener("submit", async (e) => {
       credentials: "include",
       body: JSON.stringify(body),
     });
+
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || "Invalid login");
+
     isAdmin = true;
     toggleAdminUI();
     closeLoginModal();
@@ -169,7 +186,6 @@ loginForm?.addEventListener("submit", async (e) => {
 /* ====== Events ====== */
 headerActionBtn?.addEventListener("click", () => {
   if (isAdmin) {
-    // Log out
     fetch(`${API}/auth/logout`, { method: "POST", credentials: "include" });
     isAdmin = false;
     toggleAdminUI();
@@ -182,9 +198,10 @@ loginModal?.addEventListener("click", (e) => {
   if (e.target === loginModal) closeLoginModal();
 });
 
-await checkAuth();
-
-/* ====== Init ====== */
-console.log("[Mochi] API =", API);
-setFilter("portrait");
-loadAlbums();
+/* ====== Init (async wrapper) ====== */
+(async () => {
+  await checkAuth();
+  console.log("[Mochi] API =", API);
+  setFilter("portrait");
+  loadAlbums();
+})();
