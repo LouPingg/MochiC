@@ -55,25 +55,32 @@ function setFilter(value) {
   );
   renderGallery();
 }
-
 function setMsg(el, text, type = "") {
   if (!el) return;
   el.textContent = text || "";
   el.classList.remove("msg--error", "msg--ok");
   if (type) el.classList.add(type);
 }
-
 function updateHeaderAction() {
   if (!headerActionBtn) return;
   headerActionBtn.textContent = isAdmin ? "Log out" : "Admin login";
 }
-
 function toggleAdminUI() {
   document.body.classList.toggle("is-auth", !!isAdmin);
   updateHeaderAction();
-  addPhotoForm?.classList.toggle("hidden", !isAdmin);
-}
 
+  const form = document.getElementById("add-photo-form");
+  if (form) {
+    form.classList.toggle("hidden", !isAdmin);
+
+    // Attache l'événement seulement une fois, quand on devient admin
+    if (isAdmin && !form.dataset.bound) {
+      form.addEventListener("submit", handleAddPhotoSubmit);
+      form.dataset.bound = "true";
+      console.log("[DEBUG] add-photo-form listener bound dynamically");
+    }
+  }
+}
 function getOrientationFromFile(file) {
   return new Promise((resolve) => {
     if (!file) return resolve("");
@@ -102,7 +109,6 @@ async function checkAuth() {
   }
   toggleAdminUI();
 }
-
 async function loadImages() {
   try {
     setMsg(albumsMsg, "Loading gallery…");
@@ -132,17 +138,11 @@ function renderGallery() {
   albumsGrid.innerHTML = visible
     .map(
       (p, i) => `
-        <figure class="card ${p.orientation}" data-index="${i}">
-          <img src="${p.url}" alt="${p.orientation}">
-          ${
-            isAdmin
-              ? `<button class="btn-trash" data-id="${p.id}" title="Delete">🗑</button>`
-              : ""
-          }
-        </figure>`
+      <figure class="card ${p.orientation}" data-index="${i}">
+        <img src="${p.url}" alt="${p.orientation}">
+      </figure>`
     )
     .join("");
-
   if (!visible.length) setMsg(albumsMsg, `No ${currentFilter} photos found.`);
   else setMsg(albumsMsg, "");
 }
@@ -161,66 +161,13 @@ function closeLightbox() {
 }
 
 /* ================ EVENTS ================ */
-// --- Gallery click (view or delete)
-albumsGrid?.addEventListener("click", async (e) => {
-  const trash = e.target.closest(".btn-trash");
-  if (trash && isAdmin) {
-    const id = trash.dataset.id;
-    if (!confirm("Delete this image from Cloudinary?")) return;
-    try {
-      const r = await fetch(`${API}/photos/${id}`, {
-        method: "DELETE",
-        credentials: "include",
-        headers: authHeaders(),
-      });
-      if (!r.ok) throw new Error("Delete failed");
-      await loadImages();
-    } catch (err) {
-      console.error("Delete error:", err);
-      alert("Error deleting image");
-    }
-    return;
-  }
-
+albumsGrid?.addEventListener("click", (e) => {
   const fig = e.target.closest("figure.card");
   if (!fig) return;
   openLightbox(Number(fig.dataset.index));
 });
-
-// --- Filter buttons
 btnPortrait?.addEventListener("click", () => setFilter("portrait"));
 btnLandscape?.addEventListener("click", () => setFilter("landscape"));
-
-// --- Lightbox navigation
-lightbox?.addEventListener("click", (e) => {
-  if (e.target.classList.contains("lb-close")) closeLightbox();
-  if (e.target.classList.contains("lb-next")) openLightbox(lbIndex + 1);
-  if (e.target.classList.contains("lb-prev")) openLightbox(lbIndex - 1);
-});
-
-/* ================ LOGIN MODAL ================ */
-function openLoginModal() {
-  loginModal?.classList.remove("hidden");
-}
-function closeLoginModal() {
-  loginModal?.classList.add("hidden");
-}
-
-headerActionBtn?.addEventListener("click", () => {
-  if (isAdmin) {
-    // Logout
-    setToken("");
-    fetch(`${API}/auth/logout`, { method: "POST", credentials: "include" });
-    isAdmin = false;
-    toggleAdminUI();
-  } else {
-    openLoginModal();
-  }
-});
-closeLoginBtn?.addEventListener("click", closeLoginModal);
-loginModal?.addEventListener("click", (e) => {
-  if (e.target === loginModal) closeLoginModal();
-});
 
 /* ================ ADMIN LOGIN ================ */
 loginForm?.addEventListener("submit", async (e) => {
@@ -239,44 +186,31 @@ loginForm?.addEventListener("submit", async (e) => {
     });
     const j = await r.json();
     if (!r.ok) throw new Error(j?.error || "Invalid login");
-
-    // Stocke le token si présent
     if (j?.token) setToken(j.token);
-
-    // Active le mode admin
     isAdmin = true;
     toggleAdminUI();
-
-    // Recharge la galerie
     await new Promise((r) => setTimeout(r, 500));
     await loadImages();
-
-    // Réinitialise le formulaire avant fermeture de la modale
-    if (e.currentTarget) e.currentTarget.reset();
-
-    // Ferme la modale proprement
-    closeLoginModal();
-
-    // Message de confirmation
+    e.currentTarget.reset();
     setMsg(msgEl, "Connected ✅", "msg--ok");
   } catch (err) {
     console.error("Login error:", err);
     setMsg(msgEl, err.message || "Login failed", "msg--error");
   } finally {
-    // Nettoyage du message après un délai
     setTimeout(() => setMsg(msgEl, ""), 2500);
   }
 });
 
-/* ================ ADMIN UPLOAD ================ */
-addPhotoForm?.addEventListener("submit", async (e) => {
+/* ================ ADD PHOTO (DYNAMIC HANDLER) ================ */
+async function handleAddPhotoSubmit(e) {
   e.preventDefault();
+  console.log("[DEBUG] submit intercepté ✅");
+
   const formEl = e.currentTarget;
   const submitBtn = formEl.querySelector('button[type="submit"]');
   submitBtn.disabled = true;
   const originalLabel = submitBtn.textContent;
   submitBtn.textContent = "Adding…";
-  setMsg(addPhotoMsg, "");
 
   const fd = new FormData(formEl);
   const url = (fd.get("url") || "").toString().trim();
@@ -284,17 +218,11 @@ addPhotoForm?.addEventListener("submit", async (e) => {
   const selectedOrientation = (fd.get("orientation") || "").toString();
 
   try {
-    console.log("[UPLOAD]", {
-      url,
-      hasFile: !!file,
-      orientation: selectedOrientation,
-    });
-
     if (!url && !(file && file.size > 0)) {
       throw new Error("Provide a file or a URL.");
     }
 
-    let r, data;
+    let r;
     if (file && file.size > 0) {
       const detected = await getOrientationFromFile(file);
       const orientationToSend = selectedOrientation || detected || "";
@@ -316,10 +244,10 @@ addPhotoForm?.addEventListener("submit", async (e) => {
       });
     }
 
-    data = await r.json().catch(() => ({}));
+    const data = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(data?.error || "Photo upload failed");
     await loadImages();
-    formEl?.reset?.();
+    formEl.reset();
     setMsg(addPhotoMsg, "Photo added.", "msg--ok");
   } catch (err) {
     console.error("Upload error:", err);
@@ -329,20 +257,7 @@ addPhotoForm?.addEventListener("submit", async (e) => {
     submitBtn.textContent = originalLabel;
     setTimeout(() => setMsg(addPhotoMsg, ""), 2500);
   }
-});
-
-document.addEventListener("DOMContentLoaded", () => {
-  const addForm = document.getElementById("add-photo-form");
-  if (addForm) {
-    addForm.addEventListener("submit", (e) => {
-      e.preventDefault();
-      console.log("[DEBUG] submit intercepté ✅");
-    });
-    console.log("[DEBUG] listener attaché à add-photo-form");
-  } else {
-    console.warn("[DEBUG] form introuvable au DOMContentLoaded");
-  }
-});
+}
 
 /* ================ INIT ================ */
 console.log("[Mochi] API =", API, "| host =", location.hostname);
