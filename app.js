@@ -32,16 +32,8 @@ const albumsView = document.getElementById("albums-view");
 const albumsGrid = document.getElementById("albums-grid");
 const albumsMsg = document.getElementById("albums-msg");
 
-const photosView = document.getElementById("photos-view");
-const photosGrid = document.getElementById("photos-grid");
-const photosMsg = document.getElementById("photos-msg");
-const albumTitle = document.getElementById("album-title");
-const backBtn = document.getElementById("back-to-albums");
-const homeLink = document.getElementById("home-link");
-
 const btnPortrait = document.querySelector('[data-filter="portrait"]');
 const btnLandscape = document.querySelector('[data-filter="landscape"]');
-
 const headerActionBtn = document.getElementById("header-action-btn");
 
 /* Admin UI */
@@ -259,32 +251,41 @@ window.addEventListener("keydown", (e) => {
   }
 });
 
-/* ================ ADMIN LOGIN ================ */
+/* ================ ADMIN LOGIN (FIXED) ================ */
 loginForm?.addEventListener("submit", async (e) => {
   e.preventDefault();
   const fd = new FormData(e.currentTarget);
   const body = { username: fd.get("username"), password: fd.get("password") };
-  setMsg(document.getElementById("login-msg"), "Signing in…");
+  const msgEl = document.getElementById("login-msg");
+  setMsg(msgEl, "Signing in…");
 
   try {
     const r = await fetch(`${API}/auth/login`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...authHeaders() },
+      headers: { "Content-Type": "application/json" },
       credentials: "include",
       body: JSON.stringify(body),
     });
     const j = await r.json();
+
     if (!r.ok) throw new Error(j?.error || "Invalid login");
+
     if (j?.token) setToken(j.token);
     isAdmin = true;
     toggleAdminUI();
+
+    // 🕐 petit délai pour que le cookie soit enregistré
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
     await loadImages();
-    e.currentTarget?.reset?.();
+    e.currentTarget.reset();
     closeLoginModal();
+    setMsg(msgEl, "Connected ✅", "msg--ok");
   } catch (err) {
-    setMsg(document.getElementById("login-msg"), err.message, "msg--error");
+    console.error("Login error:", err);
+    setMsg(msgEl, err.message || "Login failed", "msg--error");
   } finally {
-    setTimeout(() => setMsg(document.getElementById("login-msg"), ""), 2000);
+    setTimeout(() => setMsg(msgEl, ""), 2500);
   }
 });
 
