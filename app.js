@@ -20,6 +20,7 @@ function setMsg(el, text, type = "") {
   el.className = "msg " + type;
 }
 
+/* ====== Filter ====== */
 function setFilter(value) {
   currentFilter = value;
   document
@@ -37,10 +38,13 @@ async function loadAlbums() {
     setMsg(albumsMsg, "Loading albums…");
     const r = await fetch(`${API}/albums`, { credentials: "include" });
     const j = await r.json();
+
+    // 🧩 Force une orientation sûre
     albums = j.map((a) => ({
       ...a,
       orientation: a.orientation || "portrait",
     }));
+
     renderAlbums();
     setMsg(albumsMsg, "");
   } catch (err) {
@@ -52,18 +56,18 @@ async function loadAlbums() {
 /* ====== Render albums ====== */
 function renderAlbums() {
   if (!albums.length) {
+    albumsGrid.innerHTML = "";
     setMsg(albumsMsg, "No albums yet.", "msg--error");
     return;
   }
 
-  const visible = albums.filter(
-    (a) => a.orientation === currentFilter || !a.orientation
-  );
+  // ✅ Filtrage strict selon orientation
+  const visible = albums.filter((a) => a.orientation === currentFilter);
 
   albumsGrid.innerHTML = visible
     .map(
       (a) => `
-      <figure class="card ${a.orientation || ""}">
+      <figure class="card ${a.orientation}">
         <img src="${a.coverUrl || "assets/placeholder.jpg"}" alt="${a.title}">
         <figcaption>${a.title}</figcaption>
         ${
@@ -75,11 +79,9 @@ function renderAlbums() {
     )
     .join("");
 
-  setMsg(
-    albumsMsg,
-    visible.length ? "" : `No ${currentFilter} albums yet.`,
-    visible.length ? "" : "msg--error"
-  );
+  if (!visible.length)
+    setMsg(albumsMsg, `No ${currentFilter} albums yet.`, "msg--error");
+  else setMsg(albumsMsg, "");
 }
 
 /* ====== Create album ====== */
@@ -137,7 +139,6 @@ function closeLoginModal() {
   setMsg(loginMsg, "");
 }
 function updateHeaderAction() {
-  if (!headerActionBtn) return;
   headerActionBtn.textContent = isAdmin ? "Log out" : "Admin login";
 }
 function toggleAdminUI() {
@@ -145,6 +146,7 @@ function toggleAdminUI() {
   updateHeaderAction();
 }
 
+/* ====== Auth check ====== */
 async function checkAuth() {
   try {
     const r = await fetch(`${API}/auth/me`, { credentials: "include" });
@@ -156,6 +158,7 @@ async function checkAuth() {
   toggleAdminUI();
 }
 
+/* ====== Login ====== */
 loginForm?.addEventListener("submit", async (e) => {
   e.preventDefault();
   const fd = new FormData(e.currentTarget);
@@ -188,6 +191,7 @@ loginForm?.addEventListener("submit", async (e) => {
   }
 });
 
+/* ====== Events ====== */
 headerActionBtn?.addEventListener("click", () => {
   if (isAdmin) {
     fetch(`${API}/auth/logout`, { method: "POST", credentials: "include" });
@@ -200,6 +204,16 @@ headerActionBtn?.addEventListener("click", () => {
 closeLoginBtn?.addEventListener("click", closeLoginModal);
 loginModal?.addEventListener("click", (e) => {
   if (e.target === loginModal) closeLoginModal();
+});
+
+/* ====== Filters ====== */
+btnPortrait?.addEventListener("click", () => {
+  console.log("→ switch to portrait");
+  setFilter("portrait");
+});
+btnLandscape?.addEventListener("click", () => {
+  console.log("→ switch to landscape");
+  setFilter("landscape");
 });
 
 /* ====== Album detail view ====== */
@@ -217,11 +231,35 @@ let currentAlbum = null;
 albumsGrid?.addEventListener("click", (e) => {
   const card = e.target.closest("figure.card");
   if (!card) return;
+
+  // Delete album
+  const btn = e.target.closest(".btn-delete-album");
+  if (btn) {
+    const title = btn.dataset.title;
+    if (confirm(`Delete album "${title}" ?`)) deleteAlbum(title);
+    return;
+  }
+
   const title = card.querySelector("figcaption")?.textContent;
   const album = albums.find((a) => a.title === title);
   if (!album) return;
   openAlbum(album);
 });
+
+async function deleteAlbum(title) {
+  try {
+    const r = await fetch(`${API}/albums/${encodeURIComponent(title)}`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+    if (!r.ok) throw new Error("Delete failed");
+    albums = albums.filter((a) => a.title !== title);
+    renderAlbums();
+  } catch (err) {
+    alert("Error deleting album");
+    console.error(err);
+  }
+}
 
 function openAlbum(album) {
   currentAlbum = album;
@@ -229,8 +267,9 @@ function openAlbum(album) {
   photosView.classList.remove("hidden");
 
   document.getElementById("album-title").textContent = album.title;
-  if (isAdmin) addPhotoForm?.classList.remove("hidden");
-  else addPhotoForm?.classList.add("hidden");
+  isAdmin
+    ? addPhotoForm?.classList.remove("hidden")
+    : addPhotoForm?.classList.add("hidden");
 
   loadPhotos(album.title);
 }
@@ -339,34 +378,11 @@ photosGrid?.addEventListener("click", async (e) => {
       method: "DELETE",
       credentials: "include",
     });
-    const j = await r.json();
-    if (!r.ok) throw new Error(j.error || "Delete failed");
+    if (!r.ok) throw new Error("Delete failed");
     loadPhotos(currentAlbum.title);
   } catch (err) {
     console.error("Delete error:", err);
     alert("Failed to delete photo");
-  }
-});
-
-/* ---- Delete album ---- */
-albumsGrid?.addEventListener("click", async (e) => {
-  const btn = e.target.closest(".btn-delete-album");
-  if (!btn) return;
-  e.stopPropagation(); // ✅ Empêche d’ouvrir l’album en même temps
-  const title = btn.dataset.title;
-  if (!confirm(`Delete album "${title}" and all its photos?`)) return;
-  try {
-    const r = await fetch(`${API}/albums/${encodeURIComponent(title)}`, {
-      method: "DELETE",
-      credentials: "include",
-    });
-    const j = await r.json();
-    if (!r.ok) throw new Error(j.error || "Delete failed");
-    albums = albums.filter((a) => a.title !== title);
-    renderAlbums();
-  } catch (err) {
-    console.error("Delete album error:", err);
-    alert("Failed to delete album");
   }
 });
 
