@@ -98,6 +98,91 @@ createAlbumForm?.addEventListener("submit", async (e) => {
 btnPortrait?.addEventListener("click", () => setFilter("portrait"));
 btnLandscape?.addEventListener("click", () => setFilter("landscape"));
 
+/* ===== ADMIN LOGIN ===== */
+const loginModal = document.getElementById("login-modal");
+const headerActionBtn = document.getElementById("header-action-btn");
+const closeLoginBtn = document.getElementById("close-login-btn");
+const loginForm = document.getElementById("login-form");
+const loginMsg = document.getElementById("login-msg");
+
+let isAdmin = false;
+
+function openLoginModal() {
+  loginModal?.classList.remove("hidden");
+}
+function closeLoginModal() {
+  loginModal?.classList.add("hidden");
+  setMsg(loginMsg, "");
+}
+function updateHeaderAction() {
+  if (!headerActionBtn) return;
+  headerActionBtn.textContent = isAdmin ? "Log out" : "Admin login";
+}
+function toggleAdminUI() {
+  document.body.classList.toggle("is-auth", !!isAdmin);
+  updateHeaderAction();
+}
+
+/* ====== Auth check ====== */
+async function checkAuth() {
+  try {
+    const r = await fetch(`${API}/auth/me`, { credentials: "include" });
+    const j = await r.json();
+    isAdmin = !!j.authenticated;
+  } catch {
+    isAdmin = false;
+  }
+  toggleAdminUI();
+}
+
+/* ====== Login ====== */
+loginForm?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const fd = new FormData(e.currentTarget);
+  const body = {
+    username: fd.get("username"),
+    password: fd.get("password"),
+  };
+  setMsg(loginMsg, "Signing in…");
+  try {
+    const r = await fetch(`${API}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(body),
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || "Invalid login");
+    isAdmin = true;
+    toggleAdminUI();
+    closeLoginModal();
+    setMsg(loginMsg, "Connected ✅", "msg--ok");
+  } catch (err) {
+    console.error("Login error:", err);
+    setMsg(loginMsg, err.message, "msg--error");
+  } finally {
+    setTimeout(() => setMsg(loginMsg, ""), 2500);
+  }
+});
+
+/* ====== Events ====== */
+headerActionBtn?.addEventListener("click", () => {
+  if (isAdmin) {
+    // Log out
+    fetch(`${API}/auth/logout`, { method: "POST", credentials: "include" });
+    isAdmin = false;
+    toggleAdminUI();
+  } else {
+    openLoginModal();
+  }
+});
+closeLoginBtn?.addEventListener("click", closeLoginModal);
+loginModal?.addEventListener("click", (e) => {
+  if (e.target === loginModal) closeLoginModal();
+});
+
+await checkAuth();
+
 /* ====== Init ====== */
 console.log("[Mochi] API =", API);
 setFilter("portrait");
