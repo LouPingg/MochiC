@@ -55,21 +55,25 @@ function setFilter(value) {
   );
   renderGallery();
 }
+
 function setMsg(el, text, type = "") {
   if (!el) return;
   el.textContent = text || "";
   el.classList.remove("msg--error", "msg--ok");
   if (type) el.classList.add(type);
 }
+
 function updateHeaderAction() {
   if (!headerActionBtn) return;
   headerActionBtn.textContent = isAdmin ? "Log out" : "Admin login";
 }
+
 function toggleAdminUI() {
   document.body.classList.toggle("is-auth", !!isAdmin);
   updateHeaderAction();
   addPhotoForm?.classList.toggle("hidden", !isAdmin);
 }
+
 function getOrientationFromFile(file) {
   return new Promise((resolve) => {
     if (!file) return resolve("");
@@ -98,6 +102,7 @@ async function checkAuth() {
   }
   toggleAdminUI();
 }
+
 async function loadImages() {
   try {
     setMsg(albumsMsg, "Loading gallery…");
@@ -127,11 +132,17 @@ function renderGallery() {
   albumsGrid.innerHTML = visible
     .map(
       (p, i) => `
-      <figure class="card ${p.orientation}" data-index="${i}">
-        <img src="${p.url}" alt="${p.orientation}">
-      </figure>`
+        <figure class="card ${p.orientation}" data-index="${i}">
+          <img src="${p.url}" alt="${p.orientation}">
+          ${
+            isAdmin
+              ? `<button class="btn-trash" data-id="${p.id}" title="Delete">🗑</button>`
+              : ""
+          }
+        </figure>`
     )
     .join("");
+
   if (!visible.length) setMsg(albumsMsg, `No ${currentFilter} photos found.`);
   else setMsg(albumsMsg, "");
 }
@@ -150,15 +161,68 @@ function closeLightbox() {
 }
 
 /* ================ EVENTS ================ */
-albumsGrid?.addEventListener("click", (e) => {
+// --- Gallery click (view or delete)
+albumsGrid?.addEventListener("click", async (e) => {
+  const trash = e.target.closest(".btn-trash");
+  if (trash && isAdmin) {
+    const id = trash.dataset.id;
+    if (!confirm("Delete this image from Cloudinary?")) return;
+    try {
+      const r = await fetch(`${API}/photos/${id}`, {
+        method: "DELETE",
+        credentials: "include",
+        headers: authHeaders(),
+      });
+      if (!r.ok) throw new Error("Delete failed");
+      await loadImages();
+    } catch (err) {
+      console.error("Delete error:", err);
+      alert("Error deleting image");
+    }
+    return;
+  }
+
   const fig = e.target.closest("figure.card");
   if (!fig) return;
   openLightbox(Number(fig.dataset.index));
 });
+
+// --- Filter buttons
 btnPortrait?.addEventListener("click", () => setFilter("portrait"));
 btnLandscape?.addEventListener("click", () => setFilter("landscape"));
 
-/* ================ ADMIN LOGIN (FIXED) ================ */
+// --- Lightbox navigation
+lightbox?.addEventListener("click", (e) => {
+  if (e.target.classList.contains("lb-close")) closeLightbox();
+  if (e.target.classList.contains("lb-next")) openLightbox(lbIndex + 1);
+  if (e.target.classList.contains("lb-prev")) openLightbox(lbIndex - 1);
+});
+
+/* ================ LOGIN MODAL ================ */
+function openLoginModal() {
+  loginModal?.classList.remove("hidden");
+}
+function closeLoginModal() {
+  loginModal?.classList.add("hidden");
+}
+
+headerActionBtn?.addEventListener("click", () => {
+  if (isAdmin) {
+    // Logout
+    setToken("");
+    fetch(`${API}/auth/logout`, { method: "POST", credentials: "include" });
+    isAdmin = false;
+    toggleAdminUI();
+  } else {
+    openLoginModal();
+  }
+});
+closeLoginBtn?.addEventListener("click", closeLoginModal);
+loginModal?.addEventListener("click", (e) => {
+  if (e.target === loginModal) closeLoginModal();
+});
+
+/* ================ ADMIN LOGIN ================ */
 loginForm?.addEventListener("submit", async (e) => {
   e.preventDefault();
   const fd = new FormData(e.currentTarget);
@@ -191,7 +255,7 @@ loginForm?.addEventListener("submit", async (e) => {
   }
 });
 
-/* ================ ADMIN UPLOAD (CLOUDINARY ONLY) ================ */
+/* ================ ADMIN UPLOAD ================ */
 addPhotoForm?.addEventListener("submit", async (e) => {
   e.preventDefault();
   const formEl = e.currentTarget;
@@ -212,6 +276,7 @@ addPhotoForm?.addEventListener("submit", async (e) => {
       hasFile: !!file,
       orientation: selectedOrientation,
     });
+
     if (!url && !(file && file.size > 0)) {
       throw new Error("Provide a file or a URL.");
     }
