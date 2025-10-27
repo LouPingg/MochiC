@@ -2,7 +2,6 @@
 const PROD_API = "https://mochibc.onrender.com";
 
 // Force using the prod API while developing locally with Live Server.
-// Set to false if you actually run a backend on http://127.0.0.1:5000
 const FORCE_PROD_API = true;
 
 const isProdHost = /github\.io|netlify\.app$/i.test(location.hostname);
@@ -46,8 +45,6 @@ const btnLandscape = document.querySelector('[data-filter="landscape"]');
 const headerActionBtn = document.getElementById("header-action-btn");
 
 /* Admin UI */
-const createAlbumForm = document.getElementById("create-album-form");
-const createAlbumMsg = document.getElementById("create-album-msg");
 const addPhotoForm = document.getElementById("add-photo-form");
 const addPhotoMsg = document.getElementById("add-photo-msg");
 
@@ -61,8 +58,7 @@ const closeLoginBtn = document.getElementById("close-login-btn");
 const loginForm = document.getElementById("login-form");
 
 /* ================ STATE ================ */
-let albums = [];
-let currentAlbum = null;
+let images = [];
 let currentFilter = "portrait";
 let isAdmin = false;
 let lbIndex = 0;
@@ -76,19 +72,7 @@ function setFilter(value) {
   (value === "portrait" ? btnPortrait : btnLandscape)?.classList.add(
     "is-active"
   );
-  if (currentAlbum) renderPhotos();
-  else renderAlbums();
-}
-function firstPhotoUrlByOrientation(album, orientation) {
-  const p = album.photos.find((ph) => ph.orientation === orientation);
-  return p ? p.url : "";
-}
-function countByOrientation(album, orientation) {
-  return album.photos.filter((ph) => ph.orientation === orientation).length;
-}
-function getCurrentPhotoList() {
-  if (!currentAlbum) return [];
-  return currentAlbum.photos.filter((p) => p.orientation === currentFilter);
+  renderGallery();
 }
 function setMsg(el, text, type = "") {
   if (!el) return;
@@ -97,26 +81,22 @@ function setMsg(el, text, type = "") {
   if (type) el.classList.add(type);
 }
 
-/* Admin UI toggle (header button + body class + admin panel visibility) */
+/* Admin UI toggle */
 function updateHeaderAction() {
   if (!headerActionBtn) return;
   if (isAdmin) {
     headerActionBtn.textContent = "Log out";
     headerActionBtn.dataset.state = "logout";
-    headerActionBtn.removeAttribute("aria-haspopup");
-    headerActionBtn.removeAttribute("aria-controls");
   } else {
     headerActionBtn.textContent = "Admin login";
     headerActionBtn.dataset.state = "login";
-    headerActionBtn.setAttribute("aria-haspopup", "dialog");
-    headerActionBtn.setAttribute("aria-controls", "login-modal");
   }
 }
 function toggleAdminUI() {
   document.body.classList.toggle("is-auth", !!isAdmin);
   updateHeaderAction();
   if (addPhotoForm) {
-    if (isAdmin && currentAlbum) addPhotoForm.classList.remove("hidden");
+    if (isAdmin) addPhotoForm.classList.remove("hidden");
     else addPhotoForm.classList.add("hidden");
   }
 }
@@ -132,7 +112,7 @@ function closeLoginModal() {
   loginModal?.classList.add("hidden");
 }
 
-/* Orientation helper for FILE uploads */
+/* Orientation helper */
 function getOrientationFromFile(file) {
   return new Promise((resolve) => {
     if (!file) return resolve("");
@@ -162,7 +142,6 @@ async function checkAuth() {
   toggleAdminUI();
 }
 
-/* ========= NEW: load images directly from Cloudinary ========= */
 async function loadImages() {
   try {
     setMsg(albumsMsg, "Loading gallery…");
@@ -172,21 +151,12 @@ async function loadImages() {
     });
     if (!res.ok) throw new Error("Error loading /images " + res.status);
     const data = await res.json();
-
-    // Simule un album global unique contenant toutes les images Cloudinary
-    albums = [
-      {
-        id: "mochi-all",
-        title: "Gallery",
-        photos: data.map((img) => ({
-          id: img.public_id,
-          url: img.url,
-          orientation: img.width >= img.height ? "landscape" : "portrait",
-        })),
-      },
-    ];
-
-    renderAlbums();
+    images = data.map((img) => ({
+      id: img.public_id,
+      url: img.url,
+      orientation: img.width >= img.height ? "landscape" : "portrait",
+    }));
+    renderGallery();
     setMsg(albumsMsg, "");
   } catch (err) {
     console.error(err);
@@ -195,49 +165,10 @@ async function loadImages() {
 }
 
 /* ================ RENDER ================ */
-function renderAlbums() {
-  if (!albumsGrid || !albumsView || !photosView) return;
-  const visible = albums.filter(
-    (a) => countByOrientation(a, currentFilter) > 0
-  );
-
+function renderGallery() {
+  if (!albumsGrid) return;
+  const visible = images.filter((p) => p.orientation === currentFilter);
   albumsGrid.innerHTML = visible
-    .map((a) => {
-      const cover = firstPhotoUrlByOrientation(a, currentFilter);
-      const count = countByOrientation(a, currentFilter);
-      return `
-      <article class="album-card" data-album="${
-        a.id
-      }" tabindex="0" aria-label="Open ${a.title}">
-        ${
-          cover
-            ? `<img src="${cover}" alt="Preview ${a.title}" loading="lazy">`
-            : ""
-        }
-        <div class="title">${a.title}</div>
-        <div class="meta">${count} photo(s)</div>
-      </article>`;
-    })
-    .join("");
-
-  if (!visible.length) {
-    albumsGrid.innerHTML = "";
-    setMsg(albumsMsg, `No ${currentFilter} photos found.`);
-  } else {
-    setMsg(albumsMsg, "");
-  }
-
-  photosView.classList.add("hidden");
-  albumsView.classList.remove("hidden");
-  addPhotoForm?.classList.add("hidden");
-}
-
-function renderPhotos() {
-  if (!currentAlbum || !photosGrid || !albumTitle) return;
-  albumTitle.textContent = currentAlbum.title;
-
-  const list = getCurrentPhotoList();
-  photosGrid.innerHTML = list
     .map(
       (p, i) => `
       <figure class="card ${p.orientation}" data-index="${i}">
@@ -250,85 +181,38 @@ function renderPhotos() {
       </figure>`
     )
     .join("");
-
-  if (!list.length) {
-    photosGrid.innerHTML = "";
-    setMsg(photosMsg, `No ${currentFilter} photos.`);
-  } else {
-    setMsg(photosMsg, "");
-  }
-
-  albumsView.classList.add("hidden");
-  photosView.classList.remove("hidden");
-  if (isAdmin) addPhotoForm?.classList.remove("hidden");
-}
-
-/* ================ NAVIGATION ================ */
-function openAlbum(id) {
-  currentAlbum = albums.find((a) => a.id === id);
-  if (!currentAlbum) return;
-  renderPhotos();
-}
-function backToAlbums() {
-  currentAlbum = null;
-  renderAlbums();
+  if (!visible.length) setMsg(albumsMsg, `No ${currentFilter} photos found.`);
+  else setMsg(albumsMsg, "");
 }
 
 /* ================ LIGHTBOX ================ */
 function openLightbox(index) {
-  const list = getCurrentPhotoList();
-  if (!list.length || !lightbox) return;
-  lbIndex = Math.max(0, Math.min(index, list.length - 1));
-  updateLightbox();
+  const visible = images.filter((p) => p.orientation === currentFilter);
+  if (!visible.length || !lightbox) return;
+  lbIndex = Math.max(0, Math.min(index, visible.length - 1));
+  lightboxImage.src = visible[lbIndex].url;
   lightbox.classList.remove("hidden");
 }
-function updateLightbox() {
-  const list = getCurrentPhotoList();
-  if (!list.length || !lightboxImage) return;
-  lightboxImage.src = list[lbIndex].url;
-}
 function closeLightbox() {
-  if (!lightbox || !lightboxImage) return;
-  lightbox.classList.add("hidden");
+  lightbox?.classList.add("hidden");
   lightboxImage.src = "";
 }
 function nextPhoto() {
-  const list = getCurrentPhotoList();
-  lbIndex = (lbIndex + 1) % list.length;
-  updateLightbox();
+  const visible = images.filter((p) => p.orientation === currentFilter);
+  lbIndex = (lbIndex + 1) % visible.length;
+  lightboxImage.src = visible[lbIndex].url;
 }
 function prevPhoto() {
-  const list = getCurrentPhotoList();
-  lbIndex = (lbIndex - 1 + list.length) % list.length;
-  updateLightbox();
+  const visible = images.filter((p) => p.orientation === currentFilter);
+  lbIndex = (lbIndex - 1 + visible.length) % visible.length;
+  lightboxImage.src = visible[lbIndex].url;
 }
 
 /* ================ EVENTS ================ */
 albumsGrid?.addEventListener("click", (e) => {
-  const card = e.target.closest("[data-album]");
-  if (card) openAlbum(card.dataset.album);
-});
-albumsGrid?.addEventListener("keydown", (e) => {
-  if (e.key === "Enter") {
-    const card = e.target.closest("[data-album]");
-    if (card) openAlbum(card.dataset.album);
-  }
-});
-
-photosGrid?.addEventListener("click", (e) => {
   const fig = e.target.closest("figure.card");
   if (!fig) return;
   openLightbox(Number(fig.dataset.index));
-});
-
-backBtn?.addEventListener("click", backToAlbums);
-
-homeLink?.addEventListener("click", async (e) => {
-  e.preventDefault();
-  currentAlbum = null;
-  await loadImages();
-  setFilter(currentFilter);
-  window.scrollTo({ top: 0, behavior: "smooth" });
 });
 
 btnPortrait?.addEventListener("click", () => setFilter("portrait"));
@@ -392,7 +276,6 @@ loginForm?.addEventListener("submit", async (e) => {
     const j = await r.json();
     if (!r.ok) throw new Error(j?.error || "Invalid login");
     if (j?.token) setToken(j.token);
-
     isAdmin = true;
     toggleAdminUI();
     await loadImages();
@@ -402,6 +285,69 @@ loginForm?.addEventListener("submit", async (e) => {
     setMsg(document.getElementById("login-msg"), err.message, "msg--error");
   } finally {
     setTimeout(() => setMsg(document.getElementById("login-msg"), ""), 2000);
+  }
+});
+
+/* ================ ADMIN UPLOAD (CLOUDINARY ONLY) ================ */
+addPhotoForm?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const formEl = e.currentTarget;
+  const submitBtn = formEl.querySelector('button[type="submit"]');
+  submitBtn.disabled = true;
+  const originalLabel = submitBtn.textContent;
+  submitBtn.textContent = "Adding…";
+  setMsg(addPhotoMsg, "");
+
+  const fd = new FormData(formEl);
+  const url = (fd.get("url") || "").toString().trim();
+  const file = fd.get("file");
+  const selectedOrientation = (fd.get("orientation") || "").toString();
+
+  try {
+    if (!url && !(file && file.size > 0)) {
+      throw new Error("Provide a file or a URL.");
+    }
+    if (url && !selectedOrientation) {
+      throw new Error("Select an orientation when using an image URL.");
+    }
+
+    let r, data;
+    if (file && file.size > 0) {
+      const detected = await getOrientationFromFile(file);
+      const orientationToSend = selectedOrientation || detected || "";
+      const form = new FormData();
+      form.append("file", file);
+      if (orientationToSend) form.append("orientation", orientationToSend);
+      r = await fetch(`${API}/photos`, {
+        method: "POST",
+        credentials: "include",
+        headers: authHeaders(),
+        body: form,
+      });
+    } else {
+      r = await fetch(`${API}/photos`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        credentials: "include",
+        body: JSON.stringify({
+          url,
+          orientation: selectedOrientation,
+        }),
+      });
+    }
+
+    data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data?.error || "Photo upload failed");
+
+    await loadImages();
+    formEl?.reset?.();
+    setMsg(addPhotoMsg, "Photo added.", "msg--ok");
+  } catch (err) {
+    setMsg(addPhotoMsg, err.message, "msg--error");
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = originalLabel;
+    setTimeout(() => setMsg(addPhotoMsg, ""), 2500);
   }
 });
 
