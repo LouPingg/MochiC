@@ -77,6 +77,7 @@ createAlbumForm?.addEventListener("submit", async (e) => {
     const r = await fetch(`${API}/albums`, {
       method: "POST",
       body: form,
+      credentials: "include",
     });
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || "failed");
