@@ -27,34 +27,24 @@ function authHeaders() {
 /* ================ SELECTORS ================ */
 const albumsGrid = document.getElementById("albums-grid");
 const albumsMsg = document.getElementById("albums-msg");
-const btnPortrait = document.querySelector('[data-filter="portrait"]');
-const btnLandscape = document.querySelector('[data-filter="landscape"]');
 const headerActionBtn = document.getElementById("header-action-btn");
+const createAlbumForm = document.getElementById("create-album-form");
+const createAlbumMsg = document.getElementById("create-album-msg");
 const addPhotoForm = document.getElementById("add-photo-form");
 const addPhotoMsg = document.getElementById("add-photo-msg");
 const lightbox = document.getElementById("lightbox");
 const lightboxImage = document.getElementById("lightbox-image");
 const loginModal = document.getElementById("login-modal");
-const closeLoginBtn = document.getElementById("close-login-btn");
 const loginForm = document.getElementById("login-form");
 
 /* ================ STATE ================ */
+let albums = [];
 let images = [];
-let currentFilter = "portrait";
 let isAdmin = false;
+let currentFilter = "portrait";
 let lbIndex = 0;
 
 /* ================ HELPERS ================ */
-function setFilter(value) {
-  currentFilter = value;
-  document
-    .querySelectorAll("[data-filter]")
-    .forEach((b) => b.classList.remove("is-active"));
-  (value === "portrait" ? btnPortrait : btnLandscape)?.classList.add(
-    "is-active"
-  );
-  renderGallery();
-}
 function setMsg(el, text, type = "") {
   if (!el) return;
   el.textContent = text || "";
@@ -66,19 +56,21 @@ function updateHeaderAction() {
   headerActionBtn.textContent = isAdmin ? "Log out" : "Admin login";
 }
 function toggleAdminUI() {
+  console.log("[DEBUG] toggleAdminUI() | isAdmin =", isAdmin);
   document.body.classList.toggle("is-auth", !!isAdmin);
   updateHeaderAction();
 
-  const form = document.getElementById("add-photo-form");
-  if (form) {
-    form.classList.toggle("hidden", !isAdmin);
-
-    // Attache l'événement seulement une fois, quand on devient admin
-    if (isAdmin && !form.dataset.bound) {
-      form.addEventListener("submit", handleAddPhotoSubmit);
-      form.dataset.bound = "true";
-      console.log("[DEBUG] add-photo-form listener bound dynamically");
-    }
+  // activate Create Album form
+  if (createAlbumForm && isAdmin && !createAlbumForm.dataset.bound) {
+    createAlbumForm.addEventListener("submit", handleCreateAlbumSubmit);
+    createAlbumForm.dataset.bound = "true";
+    console.log("[DEBUG] create-album listener bound dynamically");
+  }
+  // activate Add Photo form
+  if (addPhotoForm && isAdmin && !addPhotoForm.dataset.bound) {
+    addPhotoForm.addEventListener("submit", handleAddPhotoSubmit);
+    addPhotoForm.dataset.bound = "true";
+    console.log("[DEBUG] add-photo listener bound dynamically");
   }
 }
 function getOrientationFromFile(file) {
@@ -86,8 +78,8 @@ function getOrientationFromFile(file) {
     if (!file) return resolve("");
     const img = new Image();
     img.onload = () => {
-      const orientation = img.width >= img.height ? "landscape" : "portrait";
-      resolve(orientation);
+      const o = img.width >= img.height ? "landscape" : "portrait";
+      resolve(o);
       URL.revokeObjectURL(img.src);
     };
     img.onerror = () => resolve("");
@@ -109,65 +101,49 @@ async function checkAuth() {
   }
   toggleAdminUI();
 }
-async function loadImages() {
+async function loadAlbums() {
   try {
-    setMsg(albumsMsg, "Loading gallery…");
-    const res = await fetch(`${API}/images`, {
+    setMsg(albumsMsg, "Loading albums…");
+    const r = await fetch(`${API}/albums`, {
       credentials: "include",
       headers: authHeaders(),
     });
-    if (!res.ok) throw new Error("Error loading /images " + res.status);
-    const data = await res.json();
-    images = data.map((img) => ({
-      id: img.public_id,
-      url: img.url,
-      orientation: img.width >= img.height ? "landscape" : "portrait",
-    }));
-    renderGallery();
+    if (!r.ok) throw new Error("Error loading albums");
+    albums = await r.json();
+    renderAlbums();
     setMsg(albumsMsg, "");
   } catch (err) {
     console.error(err);
-    setMsg(albumsMsg, "Failed to load gallery.", "msg--error");
+    setMsg(albumsMsg, "Failed to load albums.", "msg--error");
   }
 }
 
 /* ================ RENDER ================ */
-function renderGallery() {
+function renderAlbums() {
   if (!albumsGrid) return;
-  const visible = images.filter((p) => p.orientation === currentFilter);
-  albumsGrid.innerHTML = visible
+  albumsGrid.innerHTML = albums
     .map(
-      (p, i) => `
-      <figure class="card ${p.orientation}" data-index="${i}">
-        <img src="${p.url}" alt="${p.orientation}">
-      </figure>`
+      (a, i) => `
+    <figure class="card ${a.orientation}" data-index="${i}">
+      <img src="${a.coverUrl}" alt="${a.title}">
+      <figcaption>${a.title}</figcaption>
+    </figure>`
     )
     .join("");
-  if (!visible.length) setMsg(albumsMsg, `No ${currentFilter} photos found.`);
-  else setMsg(albumsMsg, "");
+  if (!albums.length) setMsg(albumsMsg, "No albums yet.");
 }
 
 /* ================ LIGHTBOX ================ */
 function openLightbox(index) {
-  const visible = images.filter((p) => p.orientation === currentFilter);
-  if (!visible.length || !lightbox) return;
-  lbIndex = Math.max(0, Math.min(index, visible.length - 1));
-  lightboxImage.src = visible[lbIndex].url;
+  if (!albums.length || !lightbox) return;
+  lbIndex = Math.max(0, Math.min(index, albums.length - 1));
+  lightboxImage.src = albums[lbIndex].coverUrl;
   lightbox.classList.remove("hidden");
 }
 function closeLightbox() {
   lightbox?.classList.add("hidden");
   lightboxImage.src = "";
 }
-
-/* ================ EVENTS ================ */
-albumsGrid?.addEventListener("click", (e) => {
-  const fig = e.target.closest("figure.card");
-  if (!fig) return;
-  openLightbox(Number(fig.dataset.index));
-});
-btnPortrait?.addEventListener("click", () => setFilter("portrait"));
-btnLandscape?.addEventListener("click", () => setFilter("landscape"));
 
 /* ================ ADMIN LOGIN ================ */
 loginForm?.addEventListener("submit", async (e) => {
@@ -189,80 +165,85 @@ loginForm?.addEventListener("submit", async (e) => {
     if (j?.token) setToken(j.token);
     isAdmin = true;
     toggleAdminUI();
-    await new Promise((r) => setTimeout(r, 500));
-    await loadImages();
-    e.currentTarget.reset();
+    await loadAlbums();
     setMsg(msgEl, "Connected ✅", "msg--ok");
   } catch (err) {
     console.error("Login error:", err);
     setMsg(msgEl, err.message || "Login failed", "msg--error");
   } finally {
-    setTimeout(() => setMsg(msgEl, ""), 2500);
+    setTimeout(() => setMsg(msgEl, ""), 2000);
   }
 });
 
-/* ================ ADD PHOTO (DYNAMIC HANDLER) ================ */
-async function handleAddPhotoSubmit(e) {
+/* ================ CREATE ALBUM ================ */
+async function handleCreateAlbumSubmit(e) {
   e.preventDefault();
-  console.log("[DEBUG] submit intercepté ✅");
+  console.log("[DEBUG] create-album submit intercepted ✅");
 
-  const formEl = e.currentTarget;
-  const submitBtn = formEl.querySelector('button[type="submit"]');
-  submitBtn.disabled = true;
-  const originalLabel = submitBtn.textContent;
-  submitBtn.textContent = "Adding…";
+  const form = e.currentTarget;
+  const btn = form.querySelector('button[type="submit"]');
+  btn.disabled = true;
+  const originalText = btn.textContent;
+  btn.textContent = "Creating…";
 
-  const fd = new FormData(formEl);
-  const url = (fd.get("url") || "").toString().trim();
+  const fd = new FormData(form);
+  const title = fd.get("title")?.toString().trim();
+  const url = fd.get("url")?.toString().trim();
   const file = fd.get("file");
-  const selectedOrientation = (fd.get("orientation") || "").toString();
+  const orientation = fd.get("orientation")?.toString();
 
   try {
-    if (!url && !(file && file.size > 0)) {
-      throw new Error("Provide a file or a URL.");
-    }
+    if (!title) throw new Error("Album title required");
+    if (!url && !(file && file.size > 0))
+      throw new Error("Provide an image or URL.");
 
-    let r;
+    let res;
     if (file && file.size > 0) {
       const detected = await getOrientationFromFile(file);
-      const orientationToSend = selectedOrientation || detected || "";
-      const form = new FormData();
-      form.append("file", file);
-      if (orientationToSend) form.append("orientation", orientationToSend);
-      r = await fetch(`${API}/photos`, {
+      const formData = new FormData();
+      formData.append("title", title);
+      formData.append("file", file);
+      formData.append("orientation", orientation || detected || "");
+      res = await fetch(`${API}/albums`, {
         method: "POST",
         credentials: "include",
         headers: authHeaders(),
-        body: form,
+        body: formData,
       });
     } else {
-      r = await fetch(`${API}/photos`, {
+      res = await fetch(`${API}/albums`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
         credentials: "include",
-        body: JSON.stringify({ url, orientation: selectedOrientation }),
+        body: JSON.stringify({ title, url, orientation }),
       });
     }
 
-    const data = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(data?.error || "Photo upload failed");
-    await loadImages();
-    formEl.reset();
-    setMsg(addPhotoMsg, "Photo added.", "msg--ok");
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data?.error || "Album creation failed");
+    await loadAlbums();
+    form.reset();
+    setMsg(createAlbumMsg, "Album created ✅", "msg--ok");
   } catch (err) {
-    console.error("Upload error:", err);
-    setMsg(addPhotoMsg, err.message, "msg--error");
+    console.error("Album creation error:", err);
+    setMsg(createAlbumMsg, err.message, "msg--error");
   } finally {
-    submitBtn.disabled = false;
-    submitBtn.textContent = originalLabel;
-    setTimeout(() => setMsg(addPhotoMsg, ""), 2500);
+    btn.disabled = false;
+    btn.textContent = originalText;
+    setTimeout(() => setMsg(createAlbumMsg, ""), 2500);
   }
+}
+
+/* ================ ADD PHOTO (later) ================ */
+async function handleAddPhotoSubmit(e) {
+  e.preventDefault();
+  console.log("[DEBUG] add-photo submit intercepted ✅");
+  // TODO: to implement after albums exist
 }
 
 /* ================ INIT ================ */
 console.log("[Mochi] API =", API, "| host =", location.hostname);
-setFilter("portrait");
 (async () => {
   await checkAuth();
-  await loadImages();
+  await loadAlbums();
 })();
