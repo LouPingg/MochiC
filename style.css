@@ -337,6 +337,65 @@ body.is-auth #add-photo-form { display: block; }
 }
 
 
+/* === Album cards polish (center title + better trash button) === */
+
+/* Conteneur général */
+.card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+/* Image de couverture */
+.card img {
+  border-bottom: 1px solid rgba(255,255,255,.08);
+  border-radius: 14px 14px 0 0;
+}
+
+/* Titre centré sous chaque album */
+.card figcaption {
+  text-align: center;
+  font-weight: 600;
+  font-size: 0.95rem;
+  padding: 10px 8px 12px;
+  color: var(--text);
+  letter-spacing: 0.3px;
+  background: rgba(255,255,255,.03);
+  border-top: 1px solid rgba(255,255,255,.06);
+  border-radius: 0 0 14px 14px;
+}
+
+/* Bouton corbeille repositionné (plus lisible sur fond clair) */
+.btn-delete-album,
+.btn-delete {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(255,255,255,.18);
+  color: #fff;
+  font-size: 15px;
+  padding: 5px 7px;
+  border-radius: 10px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.15s ease;
+  z-index: 2;
+}
+
+.btn-delete-album:hover,
+.btn-delete:hover {
+  background: rgba(0,0,0,0.75);
+  transform: scale(1.1);
+}
+
+/* Survol carte = effet léger pour ne pas écraser le bouton */
+.card:hover .btn-delete-album,
+.card:hover .btn-delete {
+  box-shadow: 0 0 10px rgba(0,200,255,.4);
+}
+
+
 /* ===========================
    Responsive layout (Mochi)
    =========================== */
@@ -395,3 +454,5 @@ body { font-size: var(--fs-body); }
 @media (prefers-reduced-motion: reduce){
   * { animation: none !important; transition: none !important; }
 }
+
+
