@@ -37,7 +37,10 @@ async function loadAlbums() {
     setMsg(albumsMsg, "Loading albums…");
     const r = await fetch(`${API}/albums`, { credentials: "include" });
     const j = await r.json();
-    albums = j;
+    albums = j.map((a) => ({
+      ...a,
+      orientation: a.orientation || "portrait",
+    }));
     renderAlbums();
     setMsg(albumsMsg, "");
   } catch (err) {
@@ -48,6 +51,11 @@ async function loadAlbums() {
 
 /* ====== Render albums ====== */
 function renderAlbums() {
+  if (!albums.length) {
+    setMsg(albumsMsg, "No albums yet.", "msg--error");
+    return;
+  }
+
   const visible = albums.filter(
     (a) => a.orientation === currentFilter || !a.orientation
   );
@@ -55,7 +63,7 @@ function renderAlbums() {
   albumsGrid.innerHTML = visible
     .map(
       (a) => `
-      <figure class="card ${a.orientation}">
+      <figure class="card ${a.orientation || ""}">
         <img src="${a.coverUrl || "assets/placeholder.jpg"}" alt="${a.title}">
         <figcaption>${a.title}</figcaption>
         ${
@@ -67,8 +75,11 @@ function renderAlbums() {
     )
     .join("");
 
-  if (!visible.length)
-    setMsg(albumsMsg, `No ${currentFilter} albums yet.`, "msg--error");
+  setMsg(
+    albumsMsg,
+    visible.length ? "" : `No ${currentFilter} albums yet.`,
+    visible.length ? "" : "msg--error"
+  );
 }
 
 /* ====== Create album ====== */
@@ -320,6 +331,7 @@ addPhotoForm?.addEventListener("submit", async (e) => {
 photosGrid?.addEventListener("click", async (e) => {
   const btn = e.target.closest(".btn-delete");
   if (!btn) return;
+  e.stopPropagation();
   const id = btn.dataset.id;
   if (!confirm("Delete this photo?")) return;
   try {
@@ -340,6 +352,7 @@ photosGrid?.addEventListener("click", async (e) => {
 albumsGrid?.addEventListener("click", async (e) => {
   const btn = e.target.closest(".btn-delete-album");
   if (!btn) return;
+  e.stopPropagation(); // ✅ Empêche d’ouvrir l’album en même temps
   const title = btn.dataset.title;
   if (!confirm(`Delete album "${title}" and all its photos?`)) return;
   try {
