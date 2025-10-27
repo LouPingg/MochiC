@@ -198,6 +198,142 @@ loginModal?.addEventListener("click", (e) => {
   if (e.target === loginModal) closeLoginModal();
 });
 
+/* ====== Album detail view ====== */
+const albumsView = document.getElementById("albums-view");
+const photosView = document.getElementById("photos-view");
+const photosGrid = document.getElementById("photos-grid");
+const photosMsg = document.getElementById("photos-msg");
+const backToAlbumsBtn = document.getElementById("back-to-albums");
+const addPhotoForm = document.getElementById("add-photo-form");
+const addPhotoMsg = document.getElementById("add-photo-msg");
+
+let currentAlbum = null;
+
+/* ---- Open album ---- */
+albumsGrid?.addEventListener("click", (e) => {
+  const card = e.target.closest("figure.card");
+  if (!card) return;
+  const title = card.querySelector("figcaption")?.textContent;
+  const album = albums.find((a) => a.title === title);
+  if (!album) return;
+
+  openAlbum(album);
+});
+
+function openAlbum(album) {
+  currentAlbum = album;
+  albumsView.classList.add("hidden");
+  photosView.classList.remove("hidden");
+
+  document.getElementById("album-title").textContent = album.title;
+
+  if (isAdmin) addPhotoForm?.classList.remove("hidden");
+  else addPhotoForm?.classList.add("hidden");
+
+  loadPhotos(album.title);
+}
+
+/* ---- Back to albums ---- */
+backToAlbumsBtn?.addEventListener("click", () => {
+  photosView.classList.add("hidden");
+  albumsView.classList.remove("hidden");
+  photosGrid.innerHTML = "";
+  currentAlbum = null;
+});
+
+/* ---- Load photos for this album ---- */
+async function loadPhotos(albumTitle) {
+  try {
+    setMsg(photosMsg, "Loading photos…");
+    const r = await fetch(
+      `${API}/albums/${encodeURIComponent(albumTitle)}/photos`,
+      {
+        credentials: "include",
+      }
+    );
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || "Failed to load photos");
+
+    renderPhotos(j);
+    setMsg(photosMsg, "");
+  } catch (err) {
+    console.error(err);
+    setMsg(photosMsg, "Failed to load photos", "msg--error");
+  }
+}
+
+/* ---- Render photos ---- */
+function renderPhotos(list) {
+  if (!Array.isArray(list)) return;
+  photosGrid.innerHTML = list
+    .map(
+      (p) => `
+      <figure class="card ${p.orientation}">
+        <img src="${p.url}" alt="${p.orientation}">
+      </figure>`
+    )
+    .join("");
+
+  if (!list.length)
+    setMsg(photosMsg, "No photos in this album yet.", "msg--error");
+}
+
+/* ---- Add photo (admin only) ---- */
+addPhotoForm?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (!currentAlbum) return;
+
+  const fd = new FormData(e.currentTarget);
+  const url = (fd.get("url") || "").toString().trim();
+  const file = fd.get("file");
+  const selectedOrientation = (fd.get("orientation") || "").toString();
+
+  setMsg(addPhotoMsg, "Adding photo…");
+
+  try {
+    let r;
+    if (file && file.size > 0) {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("orientation", selectedOrientation);
+      r = await fetch(
+        `${API}/albums/${encodeURIComponent(currentAlbum.title)}/photos`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: {},
+          body: form,
+        }
+      );
+    } else if (url) {
+      r = await fetch(
+        `${API}/albums/${encodeURIComponent(currentAlbum.title)}/photos`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url, orientation: selectedOrientation }),
+        }
+      );
+    } else {
+      throw new Error("Provide a URL or a file.");
+    }
+
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || "Upload failed");
+
+    // refresh photos
+    loadPhotos(currentAlbum.title);
+    addPhotoForm?.reset();
+    setMsg(addPhotoMsg, "Photo added ✅", "msg--ok");
+  } catch (err) {
+    console.error("Upload error:", err);
+    setMsg(addPhotoMsg, err.message, "msg--error");
+  } finally {
+    setTimeout(() => setMsg(addPhotoMsg, ""), 2500);
+  }
+});
+
 /* ====== Init (async wrapper) ====== */
 (async () => {
   await checkAuth();
