@@ -239,18 +239,31 @@ loginForm?.addEventListener("submit", async (e) => {
     });
     const j = await r.json();
     if (!r.ok) throw new Error(j?.error || "Invalid login");
+
+    // Stocke le token si présent
     if (j?.token) setToken(j.token);
+
+    // Active le mode admin
     isAdmin = true;
     toggleAdminUI();
+
+    // Recharge la galerie
     await new Promise((r) => setTimeout(r, 500));
     await loadImages();
-    e.currentTarget.reset();
+
+    // Réinitialise le formulaire avant fermeture de la modale
+    if (e.currentTarget) e.currentTarget.reset();
+
+    // Ferme la modale proprement
     closeLoginModal();
+
+    // Message de confirmation
     setMsg(msgEl, "Connected ✅", "msg--ok");
   } catch (err) {
     console.error("Login error:", err);
     setMsg(msgEl, err.message || "Login failed", "msg--error");
   } finally {
+    // Nettoyage du message après un délai
     setTimeout(() => setMsg(msgEl, ""), 2500);
   }
 });
