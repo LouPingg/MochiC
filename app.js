@@ -331,6 +331,19 @@ addPhotoForm?.addEventListener("submit", async (e) => {
   }
 });
 
+document.addEventListener("DOMContentLoaded", () => {
+  const addForm = document.getElementById("add-photo-form");
+  if (addForm) {
+    addForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      console.log("[DEBUG] submit intercepté ✅");
+    });
+    console.log("[DEBUG] listener attaché à add-photo-form");
+  } else {
+    console.warn("[DEBUG] form introuvable au DOMContentLoaded");
+  }
+});
+
 /* ================ INIT ================ */
 console.log("[Mochi] API =", API, "| host =", location.hostname);
 setFilter("portrait");
