@@ -35,7 +35,7 @@ function setFilter(value) {
 async function loadAlbums() {
   try {
     setMsg(albumsMsg, "Loading albums…");
-    const r = await fetch(`${API}/albums`, { credentials: "include" }); // ✅ ajoute credentials
+    const r = await fetch(`${API}/albums`, { credentials: "include" });
     const j = await r.json();
     albums = j;
     renderAlbums();
@@ -46,9 +46,8 @@ async function loadAlbums() {
   }
 }
 
-/* ====== Render ====== */
+/* ====== Render albums ====== */
 function renderAlbums() {
-  // ✅ tolère les albums sans orientation
   const visible = albums.filter(
     (a) => a.orientation === currentFilter || !a.orientation
   );
@@ -59,6 +58,11 @@ function renderAlbums() {
       <figure class="card ${a.orientation}">
         <img src="${a.coverUrl || "assets/placeholder.jpg"}" alt="${a.title}">
         <figcaption>${a.title}</figcaption>
+        ${
+          isAdmin
+            ? `<button class="btn-delete-album" data-title="${a.title}" aria-label="Delete album">🗑️</button>`
+            : ""
+        }
       </figure>`
     )
     .join("");
@@ -93,13 +97,9 @@ createAlbumForm?.addEventListener("submit", async (e) => {
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || "failed");
 
-    // ✅ Ajout immédiat sans reload
     albums.push(j);
     renderAlbums();
-
-    // ✅ reset protégé
     createAlbumForm?.reset();
-
     setMsg(createMsg, "Album created ✅", "msg--ok");
   } catch (err) {
     console.error("Album create error:", err);
@@ -108,10 +108,6 @@ createAlbumForm?.addEventListener("submit", async (e) => {
     setTimeout(() => setMsg(createMsg, ""), 2500);
   }
 });
-
-/* ====== Filtres ====== */
-btnPortrait?.addEventListener("click", () => setFilter("portrait"));
-btnLandscape?.addEventListener("click", () => setFilter("landscape"));
 
 /* ====== ADMIN LOGIN ====== */
 const loginModal = document.getElementById("login-modal");
@@ -138,7 +134,6 @@ function toggleAdminUI() {
   updateHeaderAction();
 }
 
-/* ====== Auth check ====== */
 async function checkAuth() {
   try {
     const r = await fetch(`${API}/auth/me`, { credentials: "include" });
@@ -150,7 +145,6 @@ async function checkAuth() {
   toggleAdminUI();
 }
 
-/* ====== Login ====== */
 loginForm?.addEventListener("submit", async (e) => {
   e.preventDefault();
   const fd = new FormData(e.currentTarget);
@@ -183,7 +177,6 @@ loginForm?.addEventListener("submit", async (e) => {
   }
 });
 
-/* ====== Events ====== */
 headerActionBtn?.addEventListener("click", () => {
   if (isAdmin) {
     fetch(`${API}/auth/logout`, { method: "POST", credentials: "include" });
@@ -216,7 +209,6 @@ albumsGrid?.addEventListener("click", (e) => {
   const title = card.querySelector("figcaption")?.textContent;
   const album = albums.find((a) => a.title === title);
   if (!album) return;
-
   openAlbum(album);
 });
 
@@ -226,7 +218,6 @@ function openAlbum(album) {
   photosView.classList.remove("hidden");
 
   document.getElementById("album-title").textContent = album.title;
-
   if (isAdmin) addPhotoForm?.classList.remove("hidden");
   else addPhotoForm?.classList.add("hidden");
 
@@ -241,19 +232,16 @@ backToAlbumsBtn?.addEventListener("click", () => {
   currentAlbum = null;
 });
 
-/* ---- Load photos for this album ---- */
+/* ---- Load photos ---- */
 async function loadPhotos(albumTitle) {
   try {
     setMsg(photosMsg, "Loading photos…");
     const r = await fetch(
       `${API}/albums/${encodeURIComponent(albumTitle)}/photos`,
-      {
-        credentials: "include",
-      }
+      { credentials: "include" }
     );
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || "Failed to load photos");
-
     renderPhotos(j);
     setMsg(photosMsg, "");
   } catch (err) {
@@ -270,6 +258,11 @@ function renderPhotos(list) {
       (p) => `
       <figure class="card ${p.orientation}">
         <img src="${p.url}" alt="${p.orientation}">
+        ${
+          isAdmin
+            ? `<button class="btn-delete" data-id="${p.id}" aria-label="Delete photo">🗑️</button>`
+            : ""
+        }
       </figure>`
     )
     .join("");
@@ -278,16 +271,14 @@ function renderPhotos(list) {
     setMsg(photosMsg, "No photos in this album yet.", "msg--error");
 }
 
-/* ---- Add photo (admin only) ---- */
+/* ---- Add photo ---- */
 addPhotoForm?.addEventListener("submit", async (e) => {
   e.preventDefault();
   if (!currentAlbum) return;
-
   const fd = new FormData(e.currentTarget);
   const url = (fd.get("url") || "").toString().trim();
   const file = fd.get("file");
   const selectedOrientation = (fd.get("orientation") || "").toString();
-
   setMsg(addPhotoMsg, "Adding photo…");
 
   try {
@@ -298,12 +289,7 @@ addPhotoForm?.addEventListener("submit", async (e) => {
       form.append("orientation", selectedOrientation);
       r = await fetch(
         `${API}/albums/${encodeURIComponent(currentAlbum.title)}/photos`,
-        {
-          method: "POST",
-          credentials: "include",
-          headers: {},
-          body: form,
-        }
+        { method: "POST", credentials: "include", body: form }
       );
     } else if (url) {
       r = await fetch(
@@ -315,14 +301,10 @@ addPhotoForm?.addEventListener("submit", async (e) => {
           body: JSON.stringify({ url, orientation: selectedOrientation }),
         }
       );
-    } else {
-      throw new Error("Provide a URL or a file.");
-    }
+    } else throw new Error("Provide a URL or a file.");
 
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || "Upload failed");
-
-    // refresh photos
     loadPhotos(currentAlbum.title);
     addPhotoForm?.reset();
     setMsg(addPhotoMsg, "Photo added ✅", "msg--ok");
@@ -334,7 +316,48 @@ addPhotoForm?.addEventListener("submit", async (e) => {
   }
 });
 
-/* ====== Init (async wrapper) ====== */
+/* ---- Delete photo ---- */
+photosGrid?.addEventListener("click", async (e) => {
+  const btn = e.target.closest(".btn-delete");
+  if (!btn) return;
+  const id = btn.dataset.id;
+  if (!confirm("Delete this photo?")) return;
+  try {
+    const r = await fetch(`${API}/photos/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || "Delete failed");
+    loadPhotos(currentAlbum.title);
+  } catch (err) {
+    console.error("Delete error:", err);
+    alert("Failed to delete photo");
+  }
+});
+
+/* ---- Delete album ---- */
+albumsGrid?.addEventListener("click", async (e) => {
+  const btn = e.target.closest(".btn-delete-album");
+  if (!btn) return;
+  const title = btn.dataset.title;
+  if (!confirm(`Delete album "${title}" and all its photos?`)) return;
+  try {
+    const r = await fetch(`${API}/albums/${encodeURIComponent(title)}`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || "Delete failed");
+    albums = albums.filter((a) => a.title !== title);
+    renderAlbums();
+  } catch (err) {
+    console.error("Delete album error:", err);
+    alert("Failed to delete album");
+  }
+});
+
+/* ====== Init ====== */
 (async () => {
   await checkAuth();
   console.log("[Mochi] API =", API);
