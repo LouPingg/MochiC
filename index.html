@@ -6,20 +6,19 @@
     <title>Mochi pics</title>
     <link rel="stylesheet" href="style.css" />
     <link rel="icon" href="assets/favicon.ico" />
-    <!-- IMPORTANT: defer + cache-bust for GitHub Pages -->
-    <script type="module" src="./app.js?v=20251021" defer></script>
+    <script type="module" src="./app.js?v=20251028" defer></script>
     <link
       href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&display=swap"
       rel="stylesheet"
     />
   </head>
+
   <body>
     <header class="site-header">
       <a href="#" id="home-link" aria-label="Back to homepage">
         <img src="assets/logo.png" alt="Mochi pics logo" class="logo" />
       </a>
 
-      <!-- Header action: toggles between “Admin login” and “Log out” -->
       <button
         id="header-action-btn"
         class="btn btn-login"
@@ -33,21 +32,7 @@
     </header>
 
     <main class="container">
-      <!-- Filters -->
-      <section class="filtres" aria-label="Filter the gallery">
-        <button
-          class="filter-btn is-active"
-          type="button"
-          data-filter="portrait"
-        >
-          Portraits
-        </button>
-        <button class="filter-btn" type="button" data-filter="landscape">
-          Landscapes
-        </button>
-      </section>
-
-      <!-- Admin panel (only shows when logged in) -->
+      <!-- Admin panel -->
       <section id="admin-panel" class="admin" aria-label="Administration panel">
         <div class="admin-actions">
           <form id="create-album-form" class="admin-box" novalidate>
@@ -55,41 +40,12 @@
 
             <div class="row">
               <label for="album-title">Album title</label>
-              <input
-                id="album-title"
-                type="text"
-                name="title"
-                placeholder="Album name"
-                required
-              />
+              <input id="album-title" type="text" name="title" required />
             </div>
 
             <div class="row">
-              <label for="photo-url"
-                >Image URL (optional if you upload a file)</label
-              >
-              <input
-                id="photo-url"
-                type="url"
-                name="url"
-                placeholder="https://..."
-              />
-            </div>
-
-            <div class="row">
-              <label for="photo-file">Or pick a file</label>
+              <label for="photo-file">Pick a file</label>
               <input id="photo-file" type="file" name="file" accept="image/*" />
-            </div>
-
-            <div class="row">
-              <label for="photo-orientation"
-                >Orientation (required if URL is used)</label
-              >
-              <select id="photo-orientation" name="orientation">
-                <option value="">Auto (when file)</option>
-                <option value="landscape">Landscape</option>
-                <option value="portrait">Portrait</option>
-              </select>
             </div>
 
             <button type="submit" class="btn">Create</button>
@@ -112,38 +68,15 @@
       >
         <div class="photos-header">
           <button id="back-to-albums" type="button">Albums</button>
-          <!-- <- plus de flèche ici -->
           <h2 id="album-title"></h2>
-          <span aria-hidden="true"></span>
+          <span></span>
         </div>
 
-        <!-- Admin add-photo (only visible when auth) -->
         <form id="add-photo-form" class="admin-box add-photo hidden" novalidate>
           <h3>Add photo to this album</h3>
           <div class="row">
-            <label for="add-url"
-              >Image URL (optional if you upload a file)</label
-            >
-            <input
-              id="add-url"
-              type="url"
-              name="url"
-              placeholder="https://..."
-            />
-          </div>
-          <div class="row">
-            <label for="add-file">Or pick a file</label>
+            <label for="add-file">Pick a file</label>
             <input id="add-file" type="file" name="file" accept="image/*" />
-          </div>
-          <div class="row">
-            <label for="add-orientation"
-              >Orientation (required if URL is used)</label
-            >
-            <select id="add-orientation" name="orientation">
-              <option value="">Auto (when file)</option>
-              <option value="landscape">Landscape</option>
-              <option value="portrait">Portrait</option>
-            </select>
           </div>
           <button type="submit" class="btn">Add photo</button>
           <p id="add-photo-msg" class="msg" aria-live="polite"></p>
@@ -159,7 +92,6 @@
         class="lightbox hidden"
         role="dialog"
         aria-modal="true"
-        aria-label="Photo preview"
       >
         <button class="lb-btn lb-close" aria-label="Close">×</button>
         <button class="lb-btn lb-prev" aria-label="Previous">‹</button>
@@ -173,18 +105,12 @@
         class="modal-overlay hidden"
         role="dialog"
         aria-modal="true"
-        aria-labelledby="login-modal-title"
       >
         <div class="modal-box" role="document">
-          <button
-            type="button"
-            class="modal-close"
-            id="close-login-btn"
-            aria-label="Close"
-          >
+          <button type="button" class="modal-close" id="close-login-btn">
             ×
           </button>
-          <h3 id="login-modal-title">Admin login</h3>
+          <h3>Admin login</h3>
 
           <form id="login-form" class="modal-form">
             <div class="row">
@@ -201,7 +127,6 @@
               />
             </div>
             <button type="submit" class="btn">Sign in</button>
-
             <p id="login-msg" class="msg" aria-live="polite"></p>
           </form>
         </div>
