@@ -194,7 +194,7 @@ let currentAlbum = null;
 /* ---- Open album ---- */
 albumsGrid?.addEventListener("click", (e) => {
   const card = e.target.closest("figure.card");
-  if (!card) return;
+  if (!card || e.target.closest(".btn-delete-album")) return;
   const title = card.querySelector("figcaption")?.textContent;
   const album = albums.find((a) => a.title === title);
   if (!album) return;
@@ -347,6 +347,58 @@ albumsGrid?.addEventListener("click", async (e) => {
     alert("Failed to delete album.");
   }
 });
+
+/* ====== Lightbox (photo viewer) ====== */
+let currentLightboxIndex = 0;
+let currentPhotos = [];
+
+photosGrid?.addEventListener("click", (e) => {
+  const img = e.target.closest("img");
+  if (!img || e.target.closest(".btn-delete")) return;
+  const figures = Array.from(photosGrid.querySelectorAll("figure"));
+  currentPhotos = figures.map((f) => f.querySelector("img").src);
+  currentLightboxIndex = figures.findIndex((f) => f.contains(img));
+  openLightbox(currentLightboxIndex);
+});
+
+function openLightbox(index) {
+  const src = currentPhotos[index];
+  if (!src) return;
+
+  const lightbox = document.createElement("div");
+  lightbox.className = "lightbox";
+  lightbox.innerHTML = `
+    <button class="lb-btn lb-close" aria-label="Close">✕</button>
+    <button class="lb-btn lb-prev" aria-label="Previous">‹</button>
+    <img src="${src}" alt="">
+    <button class="lb-btn lb-next" aria-label="Next">›</button>
+  `;
+  document.body.appendChild(lightbox);
+
+  function close() {
+    lightbox.remove();
+    document.removeEventListener("keydown", keyHandler);
+  }
+  function show(delta) {
+    currentLightboxIndex =
+      (currentLightboxIndex + delta + currentPhotos.length) %
+      currentPhotos.length;
+    lightbox.querySelector("img").src = currentPhotos[currentLightboxIndex];
+  }
+  function keyHandler(e) {
+    if (e.key === "Escape") close();
+    if (e.key === "ArrowLeft") show(-1);
+    if (e.key === "ArrowRight") show(1);
+  }
+
+  lightbox.querySelector(".lb-close").addEventListener("click", close);
+  lightbox.querySelector(".lb-prev").addEventListener("click", () => show(-1));
+  lightbox.querySelector(".lb-next").addEventListener("click", () => show(1));
+  lightbox.addEventListener("click", (e) => {
+    if (e.target === lightbox) close();
+  });
+  document.addEventListener("keydown", keyHandler);
+}
 
 /* ====== Init ====== */
 (async () => {
