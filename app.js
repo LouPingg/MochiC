@@ -10,29 +10,32 @@ const createMsg = document.getElementById("create-album-msg");
 
 let albums = [];
 
-/* ===== Utils ===== */
+/* ====== Utils ====== */
 function setMsg(el, text, type = "") {
   if (!el) return;
   el.textContent = text;
   el.className = "msg " + type;
 }
 
-/* ===== Load albums ===== */
+/* ====== Load albums ====== */
 async function loadAlbums() {
   try {
     setMsg(albumsMsg, "Loading albums…");
     const r = await fetch(`${API}/albums`, { credentials: "include" });
     const j = await r.json();
-    albums = j.map((a) => ({ ...a, orientation: a.orientation || "" }));
+    albums = j.map((a) => ({
+      ...a,
+      orientation: a.orientation || "portrait",
+    }));
     renderAlbums();
     setMsg(albumsMsg, "");
   } catch (err) {
     console.error(err);
-    setMsg(albumsMsg, "Failed to load albums", "msg--error");
+    setMsg(albumsMsg, "Failed to load albums.", "msg--error");
   }
 }
 
-/* ===== Render albums ===== */
+/* ====== Render albums ====== */
 function renderAlbums() {
   if (!albums.length) {
     setMsg(albumsMsg, "No albums yet.", "msg--error");
@@ -42,7 +45,7 @@ function renderAlbums() {
   albumsGrid.innerHTML = albums
     .map(
       (a) => `
-      <figure class="card ${a.orientation}">
+      <figure class="card ${a.orientation || ""}">
         <img src="${a.coverUrl || "assets/placeholder.jpg"}" alt="${a.title}">
         <figcaption>${a.title}</figcaption>
         ${
@@ -53,18 +56,19 @@ function renderAlbums() {
       </figure>`
     )
     .join("");
-  setMsg(albumsMsg, "");
 }
 
-/* ===== Create album ===== */
+/* ====== Create album ====== */
 createAlbumForm?.addEventListener("submit", async (e) => {
   e.preventDefault();
   const fd = new FormData(e.currentTarget);
   const file = fd.get("file");
   const title = fd.get("title");
 
-  if (!title) return setMsg(createMsg, "Title required", "msg--error");
-  if (!file.size) return setMsg(createMsg, "Choose a photo", "msg--error");
+  if (!title)
+    return setMsg(createMsg, "Album title is required.", "msg--error");
+  if (!file.size)
+    return setMsg(createMsg, "Please select a photo.", "msg--error");
 
   setMsg(createMsg, "Creating album…");
 
@@ -80,7 +84,7 @@ createAlbumForm?.addEventListener("submit", async (e) => {
     });
 
     const j = await r.json();
-    if (!r.ok) throw new Error(j.error || "failed");
+    if (!r.ok) throw new Error(j.error || "Album creation failed.");
 
     albums.push(j);
     renderAlbums();
@@ -94,7 +98,7 @@ createAlbumForm?.addEventListener("submit", async (e) => {
   }
 });
 
-/* ===== ADMIN LOGIN ===== */
+/* ====== ADMIN LOGIN ====== */
 const loginModal = document.getElementById("login-modal");
 const headerActionBtn = document.getElementById("header-action-btn");
 const closeLoginBtn = document.getElementById("close-login-btn");
@@ -111,8 +115,8 @@ function closeLoginModal() {
   setMsg(loginMsg, "");
 }
 function updateHeaderAction() {
-  if (headerActionBtn)
-    headerActionBtn.textContent = isAdmin ? "Log out" : "Admin login";
+  if (!headerActionBtn) return;
+  headerActionBtn.textContent = isAdmin ? "Log out" : "Admin login";
 }
 function toggleAdminUI() {
   document.body.classList.toggle("is-auth", !!isAdmin);
@@ -133,7 +137,10 @@ async function checkAuth() {
 loginForm?.addEventListener("submit", async (e) => {
   e.preventDefault();
   const fd = new FormData(e.currentTarget);
-  const body = { username: fd.get("username"), password: fd.get("password") };
+  const body = {
+    username: fd.get("username"),
+    password: fd.get("password"),
+  };
   setMsg(loginMsg, "Signing in…");
 
   try {
@@ -143,11 +150,14 @@ loginForm?.addEventListener("submit", async (e) => {
       credentials: "include",
       body: JSON.stringify(body),
     });
+
     const j = await r.json();
-    if (!r.ok) throw new Error(j.error || "Invalid login");
+    if (!r.ok) throw new Error(j.error || "Invalid login credentials.");
+
     isAdmin = true;
     toggleAdminUI();
     closeLoginModal();
+    setMsg(loginMsg, "Connected ✅", "msg--ok");
   } catch (err) {
     console.error("Login error:", err);
     setMsg(loginMsg, err.message, "msg--error");
@@ -161,14 +171,16 @@ headerActionBtn?.addEventListener("click", () => {
     fetch(`${API}/auth/logout`, { method: "POST", credentials: "include" });
     isAdmin = false;
     toggleAdminUI();
-  } else openLoginModal();
+  } else {
+    openLoginModal();
+  }
 });
 closeLoginBtn?.addEventListener("click", closeLoginModal);
 loginModal?.addEventListener("click", (e) => {
   if (e.target === loginModal) closeLoginModal();
 });
 
-/* ===== Album detail ===== */
+/* ====== Album detail view ====== */
 const albumsView = document.getElementById("albums-view");
 const photosView = document.getElementById("photos-view");
 const photosGrid = document.getElementById("photos-grid");
@@ -179,7 +191,7 @@ const addPhotoMsg = document.getElementById("add-photo-msg");
 
 let currentAlbum = null;
 
-/* Open album */
+/* ---- Open album ---- */
 albumsGrid?.addEventListener("click", (e) => {
   const card = e.target.closest("figure.card");
   if (!card) return;
@@ -193,12 +205,15 @@ function openAlbum(album) {
   currentAlbum = album;
   albumsView.classList.add("hidden");
   photosView.classList.remove("hidden");
+
   document.getElementById("album-title").textContent = album.title;
-  addPhotoForm?.classList.toggle("hidden", !isAdmin);
+  if (isAdmin) addPhotoForm?.classList.remove("hidden");
+  else addPhotoForm?.classList.add("hidden");
+
   loadPhotos(album.title);
 }
 
-/* Back */
+/* ---- Back to albums ---- */
 backToAlbumsBtn?.addEventListener("click", () => {
   photosView.classList.add("hidden");
   albumsView.classList.remove("hidden");
@@ -206,7 +221,7 @@ backToAlbumsBtn?.addEventListener("click", () => {
   currentAlbum = null;
 });
 
-/* Load photos */
+/* ---- Load photos ---- */
 async function loadPhotos(albumTitle) {
   try {
     setMsg(photosMsg, "Loading photos…");
@@ -215,16 +230,16 @@ async function loadPhotos(albumTitle) {
       { credentials: "include" }
     );
     const j = await r.json();
-    if (!r.ok) throw new Error(j.error || "Failed to load photos");
+    if (!r.ok) throw new Error(j.error || "Failed to load photos.");
     renderPhotos(j);
     setMsg(photosMsg, "");
   } catch (err) {
     console.error(err);
-    setMsg(photosMsg, "Failed to load photos", "msg--error");
+    setMsg(photosMsg, "Failed to load photos.", "msg--error");
   }
 }
 
-/* Render photos */
+/* ---- Render photos ---- */
 function renderPhotos(list) {
   if (!Array.isArray(list)) return;
   photosGrid.innerHTML = list
@@ -234,39 +249,51 @@ function renderPhotos(list) {
         <img src="${p.url}" alt="${p.orientation}">
         ${
           isAdmin
-            ? `<button class="btn-delete" data-id="${p.id}">🗑️</button>`
+            ? `<button class="btn-delete" data-id="${p.id}" aria-label="Delete photo">🗑️</button>`
             : ""
         }
       </figure>`
     )
     .join("");
+
   if (!list.length)
     setMsg(photosMsg, "No photos in this album yet.", "msg--error");
 }
 
-/* Add photo */
+/* ---- Add photo ---- */
 addPhotoForm?.addEventListener("submit", async (e) => {
   e.preventDefault();
   if (!currentAlbum) return;
   const fd = new FormData(e.currentTarget);
+  const url = (fd.get("url") || "").toString().trim();
   const file = fd.get("file");
-  if (!file || !file.size)
-    return setMsg(addPhotoMsg, "Choose a file", "msg--error");
-  setMsg(addPhotoMsg, "Adding photo…");
+  const selectedOrientation = (fd.get("orientation") || "").toString();
+  setMsg(addPhotoMsg, "Uploading photo…");
 
   try {
-    const form = new FormData();
-    form.append("file", file);
-    const r = await fetch(
-      `${API}/albums/${encodeURIComponent(currentAlbum.title)}/photos`,
-      {
-        method: "POST",
-        credentials: "include",
-        body: form,
-      }
-    );
+    let r;
+    if (file && file.size > 0) {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("orientation", selectedOrientation);
+      r = await fetch(
+        `${API}/albums/${encodeURIComponent(currentAlbum.title)}/photos`,
+        { method: "POST", credentials: "include", body: form }
+      );
+    } else if (url) {
+      r = await fetch(
+        `${API}/albums/${encodeURIComponent(currentAlbum.title)}/photos`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url, orientation: selectedOrientation }),
+        }
+      );
+    } else throw new Error("Please provide a URL or a file.");
+
     const j = await r.json();
-    if (!r.ok) throw new Error(j.error || "Upload failed");
+    if (!r.ok) throw new Error(j.error || "Upload failed.");
     loadPhotos(currentAlbum.title);
     addPhotoForm?.reset();
     setMsg(addPhotoMsg, "Photo added ✅", "msg--ok");
@@ -278,50 +305,52 @@ addPhotoForm?.addEventListener("submit", async (e) => {
   }
 });
 
-/* ===== LIGHTBOX ===== */
-const lightbox = document.getElementById("lightbox");
-const lightboxImage = document.getElementById("lightbox-image");
-const lbClose = document.querySelector(".lb-close");
-const lbPrev = document.querySelector(".lb-prev");
-const lbNext = document.querySelector(".lb-next");
-
-let currentPhotoIndex = 0;
-let currentPhotoList = [];
-
-photosGrid?.addEventListener("click", (e) => {
-  const img = e.target.closest("img");
-  if (!img) return;
-  const cards = [...photosGrid.querySelectorAll("img")];
-  currentPhotoList = cards.map((c) => c.src);
-  currentPhotoIndex = cards.indexOf(img);
-  showLightbox();
+/* ---- Delete photo ---- */
+photosGrid?.addEventListener("click", async (e) => {
+  const btn = e.target.closest(".btn-delete");
+  if (!btn) return;
+  e.stopPropagation();
+  const id = btn.dataset.id;
+  if (!confirm("Delete this photo?")) return;
+  try {
+    const r = await fetch(`${API}/photos/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || "Delete failed.");
+    loadPhotos(currentAlbum.title);
+  } catch (err) {
+    console.error("Delete error:", err);
+    alert("Failed to delete photo.");
+  }
 });
 
-function showLightbox() {
-  if (!currentPhotoList.length) return;
-  lightboxImage.src = currentPhotoList[currentPhotoIndex];
-  lightbox.classList.remove("hidden");
-}
+/* ---- Delete album ---- */
+albumsGrid?.addEventListener("click", async (e) => {
+  const btn = e.target.closest(".btn-delete-album");
+  if (!btn) return;
+  e.stopPropagation();
+  const title = btn.dataset.title;
+  if (!confirm(`Delete album "${title}" and all its photos?`)) return;
+  try {
+    const r = await fetch(`${API}/albums/${encodeURIComponent(title)}`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || "Delete failed.");
+    albums = albums.filter((a) => a.title !== title);
+    renderAlbums();
+  } catch (err) {
+    console.error("Delete album error:", err);
+    alert("Failed to delete album.");
+  }
+});
 
-lbClose?.addEventListener("click", () => lightbox.classList.add("hidden"));
-lbPrev?.addEventListener("click", () => {
-  if (!currentPhotoList.length) return;
-  currentPhotoIndex =
-    (currentPhotoIndex - 1 + currentPhotoList.length) % currentPhotoList.length;
-  showLightbox();
-});
-lbNext?.addEventListener("click", () => {
-  if (!currentPhotoList.length) return;
-  currentPhotoIndex = (currentPhotoIndex + 1) % currentPhotoList.length;
-  showLightbox();
-});
-lightbox?.addEventListener("click", (e) => {
-  if (e.target === lightbox) lightbox.classList.add("hidden");
-});
-
-/* ===== Init ===== */
+/* ====== Init ====== */
 (async () => {
   await checkAuth();
-  console.log("[Mochi] unified gallery + lightbox");
+  console.log("[Mochi] API =", API);
   loadAlbums();
 })();

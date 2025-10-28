@@ -1,140 +1,131 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Mochi pics</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mochi Pics</title>
     <link rel="stylesheet" href="style.css" />
-    <link rel="icon" href="assets/favicon.ico" />
-    <script type="module" src="./app.js?v=20251028" defer></script>
-    <link
-      href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&display=swap"
-      rel="stylesheet"
-    />
   </head>
-
   <body>
+    <!-- ===== Header ===== -->
     <header class="site-header">
-      <a href="#" id="home-link" aria-label="Back to homepage">
-        <img src="assets/logo.png" alt="Mochi pics logo" class="logo" />
-      </a>
-
-      <button
-        id="header-action-btn"
-        class="btn btn-login"
-        type="button"
-        data-state="login"
-        aria-haspopup="dialog"
-        aria-controls="login-modal"
-      >
+      <img src="assets/logo.png" alt="Mochi Pics Logo" class="logo" />
+      <button id="header-action-btn" class="btn-login" data-state="login">
         Admin login
       </button>
     </header>
 
-    <main class="container">
-      <!-- Admin panel -->
-      <section id="admin-panel" class="admin" aria-label="Administration panel">
-        <div class="admin-actions">
-          <form id="create-album-form" class="admin-box" novalidate>
-            <h3>Create an album + first photo</h3>
-
-            <div class="row">
-              <label for="album-title">Album title</label>
-              <input id="album-title" type="text" name="title" required />
-            </div>
-
-            <div class="row">
-              <label for="photo-file">Pick a file</label>
-              <input id="photo-file" type="file" name="file" accept="image/*" />
-            </div>
-
-            <button type="submit" class="btn">Create</button>
-            <p id="create-album-msg" class="msg" aria-live="polite"></p>
-          </form>
-        </div>
-      </section>
-
-      <!-- Albums view -->
-      <section id="albums-view" class="gallerie" aria-label="Albums">
+    <!-- ===== Main Gallery ===== -->
+    <main>
+      <section id="albums-view" class="gallerie">
+        <div id="albums-msg" class="msg"></div>
         <div id="albums-grid" class="grid"></div>
-        <p id="albums-msg" class="msg" aria-live="polite"></p>
       </section>
 
-      <!-- Photos view -->
-      <section
-        id="photos-view"
-        class="gallerie hidden"
-        aria-label="Album photos"
-      >
-        <div class="photos-header">
-          <button id="back-to-albums" type="button">Albums</button>
-          <h2 id="album-title"></h2>
-          <span></span>
-        </div>
+      <!-- ===== Album Photos View ===== -->
+      <section id="photos-view" class="gallerie hidden">
+        <header class="photos-header">
+          <button id="back-to-albums">Back to albums</button>
+          <h2 id="album-title">Album title</h2>
+        </header>
 
-        <form id="add-photo-form" class="admin-box add-photo hidden" novalidate>
-          <h3>Add photo to this album</h3>
+        <form id="add-photo-form" class="add-photo hidden">
+          <h3>Add a new photo</h3>
           <div class="row">
-            <label for="add-file">Pick a file</label>
-            <input id="add-file" type="file" name="file" accept="image/*" />
+            <label for="photo-url">Photo URL (optional)</label>
+            <input
+              type="url"
+              name="url"
+              id="photo-url"
+              placeholder="https://example.com/photo.jpg"
+            />
+          </div>
+          <div class="row">
+            <label for="photo-file">Or upload from your device</label>
+            <input type="file" name="file" id="photo-file" accept="image/*" />
+          </div>
+          <div class="row">
+            <label for="photo-orientation">Orientation</label>
+            <select name="orientation" id="photo-orientation">
+              <option value="portrait">Portrait</option>
+              <option value="landscape">Landscape</option>
+            </select>
           </div>
           <button type="submit" class="btn">Add photo</button>
-          <p id="add-photo-msg" class="msg" aria-live="polite"></p>
+          <div id="add-photo-msg" class="msg"></div>
         </form>
 
+        <div id="photos-msg" class="msg"></div>
         <div id="photos-grid" class="grid"></div>
-        <p id="photos-msg" class="msg" aria-live="polite"></p>
       </section>
 
-      <!-- Lightbox -->
-      <div
-        id="lightbox"
-        class="lightbox hidden"
-        role="dialog"
-        aria-modal="true"
-      >
-        <button class="lb-btn lb-close" aria-label="Close">×</button>
-        <button class="lb-btn lb-prev" aria-label="Previous">‹</button>
-        <img id="lightbox-image" src="" alt="Large photo" />
-        <button class="lb-btn lb-next" aria-label="Next">›</button>
-      </div>
-
-      <!-- Login Modal -->
-      <div
-        id="login-modal"
-        class="modal-overlay hidden"
-        role="dialog"
-        aria-modal="true"
-      >
-        <div class="modal-box" role="document">
-          <button type="button" class="modal-close" id="close-login-btn">
-            ×
-          </button>
-          <h3>Admin login</h3>
-
-          <form id="login-form" class="modal-form">
+      <!-- ===== Admin Zone ===== -->
+      <section class="admin">
+        <div class="admin-box">
+          <h3>Create new album</h3>
+          <form id="create-album-form" class="admin-actions">
             <div class="row">
-              <label>Username</label>
-              <input type="text" name="username" placeholder="admin" required />
-            </div>
-            <div class="row">
-              <label>Password</label>
+              <label for="album-title-input">Album title</label>
               <input
-                type="password"
-                name="password"
-                placeholder="••••••••"
-                required
+                type="text"
+                id="album-title-input"
+                name="title"
+                placeholder="Enter album name"
               />
             </div>
-            <button type="submit" class="btn">Sign in</button>
-            <p id="login-msg" class="msg" aria-live="polite"></p>
+            <div class="row">
+              <label for="album-file-input">Cover photo</label>
+              <input
+                type="file"
+                id="album-file-input"
+                name="file"
+                accept="image/*"
+              />
+            </div>
+            <button type="submit" class="btn">Create album</button>
+            <div id="create-album-msg" class="msg"></div>
           </form>
         </div>
-      </div>
+      </section>
     </main>
 
+    <!-- ===== Login Modal ===== -->
+    <div id="login-modal" class="modal-overlay hidden">
+      <div class="modal-box">
+        <button id="close-login-btn" class="modal-close">✕</button>
+        <h3>Administrator login</h3>
+        <form id="login-form" class="modal-form">
+          <div class="row">
+            <label for="username">Username</label>
+            <input
+              type="text"
+              name="username"
+              id="username"
+              placeholder="Enter username"
+              required
+            />
+          </div>
+          <div class="row">
+            <label for="password">Password</label>
+            <input
+              type="password"
+              name="password"
+              id="password"
+              placeholder="Enter password"
+              required
+            />
+          </div>
+          <button type="submit" class="btn">Sign in</button>
+          <div id="login-msg" class="msg"></div>
+        </form>
+      </div>
+    </div>
+
+    <!-- ===== Footer ===== -->
     <footer class="site-footer">
-      <img src="assets/footer.png" alt="Decorative footer banner" />
+      <img src="assets/footer.png" alt="Footer decorative image" />
     </footer>
+
+    <script src="app.js" defer></script>
   </body>
 </html>
